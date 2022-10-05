@@ -34,14 +34,14 @@ def getStockQuote(token, symbol):
     return stock_quote
 
 def getStockQuoteData(stocks):
-    time = datetime.datetime.now()
-    timestamp_y_m_d = time.strftime("%Y-%m-%d")
+    date = datetime.datetime.now()
+    date_y_m_d = date.strftime("%Y-%m-%d")
 
     close = []      # iexClose
     high = []       # week52High
     low = []        # week52Low
     open = []       # iexOpen
-    timestamp = []       # latestTime
+    timestamp = []  # latestTime
     volume = []     # iexVolume
     symbols = []    # symbol
     quotes = {}
@@ -54,18 +54,18 @@ def getStockQuoteData(stocks):
             if key == "week52High": high.append(value)
             if key == "week52Low": low.append(value)
             if key == "iexOpen": open.append(value)
-            if key == "latestTime": timestamp.append(timestamp_y_m_d)
+            if key == "latestTime": timestamp.append(date_y_m_d)
             if key == "iexVolume": volume.append(value)
             if key == "symbol": symbols.append(value)
 
     stock_quote_dict = {
-        "close" : close,
-        "high" : high,
-        "low" : low,
-        "open" : open,
-        "timestamp" : timestamp,
-        "volume" : volume,
-        "symbol" : symbols,
+        "Close" : close,
+        "High" : high,
+        "Low" : low,
+        "Open" : open,
+        "Date" : timestamp,
+        "Volume" : volume,
+        "Symbol" : symbols,
     }
 
     return stock_quote_dict
@@ -77,7 +77,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
         return False 
 
     # Primary Key Check
-    if pd.Series(df['symbol']).is_unique:
+    if pd.Series(df['Symbol']).is_unique:
         pass
     else:
         raise Exception("Primary Key check is violated")
@@ -91,10 +91,10 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
     today = today.strftime("%Y-%m-%d")
 
 
-    timestamps = df["timestamp"].tolist()
+    timestamps = df["Date"].tolist()
     for timestamp in timestamps:
         if datetime.datetime.strptime(timestamp, '%Y-%m-%d') == today:
-            raise Exception("At least one of the returned stock quotes does not have a yesterday's timestamp")
+            raise Exception("At least one of the returned stock quotes does not have a today's timestamp")
 
     return True
 
@@ -102,8 +102,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 if __name__ == "__main__":
     stocks = ['aapl', 'nke']
     stock_quotes = getStockQuoteData(stocks)
-    stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["symbol", "close", "high", "low", "open", "timestamp", "volume"])
-    
+    stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
     # Validate
     if check_if_valid_data(stock_quotes_df):
         print("Data valid, proceed to Load stage")
@@ -120,9 +119,9 @@ if __name__ == "__main__":
     except:
         print("Data already exists in the database")
 
-    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
+    # df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
 
     conn.close()
     print("Close database successfully")
-    print(df.head)
+    # print(df.head)
 
