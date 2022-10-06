@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<table id="data" class="table table-striped">
+  <thead>
+    <tr>
+      <th>Symbol</th>
+      <th>Date</th>
+      <th>Open</th>
+      <th>High</th>
+      <th>Low</th>
+      <th>Close</th>
+      <th>Volume</th>
+    </tr>
+  </thead>
+  <tbody>
+  </tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(document).ready(function () {
+    $('#data').DataTable({
+      ajax: '/api/data',
+      serverSide: true,
+      columns: [
+        {data: 'Symbol'},
+        {data: 'Date'},
+        {data: 'Open'},
+        {data: 'High'},
+        {data: 'Low'},
+        {data: 'Close'},
+        {data: 'Volume'},
+      ],
+    });
+  });
+</script>
+{% endblock %}

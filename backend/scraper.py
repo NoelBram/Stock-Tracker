@@ -1,21 +1,21 @@
+import os
+
+import base64
 from contextlib import nullcontext
 import copy
+from datetime import datetime
+import datetime
 from distutils.log import error
+from flask_cors import CORS, cross_origin
+import pandas as pd 
 from pyexpat.model import XML_CTYPE_ANY
-import re
+import requests
+import sqlalchemy
+from sqlalchemy.orm import sessionmaker
+import json
 import sqlite3
 from textwrap import indent
 from xml.etree.ElementTree import tostring
-# from flask import Flask
-import sqlalchemy
-import pandas as pd 
-from sqlalchemy.orm import sessionmaker
-import requests
-import json
-from datetime import datetime
-import datetime
-# from keyvalue_sqlite import KeyValueSqlite
-import base64
 
 IEX_API = "pk_913ba7d52f144907a92856b52ea0636e"
 DATABASE_LOCATION = "sqlite:///my_stock_quotes.sqlite"
@@ -98,8 +98,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-
-if __name__ == "__main__":
+def load_data():
     stocks = ['aapl', 'nke']
     stock_quotes = getStockQuoteData(stocks)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
@@ -108,9 +107,7 @@ if __name__ == "__main__":
         print("Data valid, proceed to Load stage")
 
     # Load
-    engine = sqlalchemy.create_engine(DATABASE_LOCATION)
     conn = sqlite3.connect('my_stock_quotes.sqlite')
-    cursor = conn.cursor()
 
     print("Opened database successfully")
 
@@ -119,9 +116,11 @@ if __name__ == "__main__":
     except:
         print("Data already exists in the database")
 
-    # df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
+    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
 
     conn.close()
     print("Close database successfully")
-    # print(df.head)
+    return df.head()
 
+if __name__ == '__main__':
+    print(load_data())
