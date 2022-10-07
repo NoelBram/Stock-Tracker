@@ -16,13 +16,27 @@
   <tbody>
     {% for stock in stocks %}
         <tr>
-          <td>{{ stock.Symbol }}</td>
-          <td>{{ stock.Date }}</td>
-          <td>{{ stock.Open }}</td>
-          <td>{{ stock.High }}</td>
-          <td>{{ stock.Low }}</td>
-          <td>{{ stock.Close }}</td>
-          <td>{{ stock.Volume }}</td>
+          <td>
+            <p>
+              <a class="symbol-link" data-bs-toggle="collapse" href="#{{ stock[0] }}" role="button" aria-expanded="false" aria-controls="collapseExample">
+                {{ stock[0] }}
+              </a>
+            </p>
+          </td>
+          <td>{{ stock[1] }}</td>
+          <td>{{ stock[2] }}</td>
+          <td>{{ stock[3] }}</td>
+          <td>{{ stock[4] }}</td>
+          <td>{{ stock[5] }}</td>
+          <td>{{ stock[6] }}</td>
+        </tr>
+        <tr>
+          <td colspan="7" class="card-output">
+            <div class="collapse" id="{{ stock[0] }}">
+              <div class="card card-body">
+                Graph.png __predict stuff__
+            </div>
+          </td>
         </tr>
       {% endfor %}
   </tbody>

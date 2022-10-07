@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from scraper import *
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
@@ -25,13 +26,16 @@ class User(db.Model):
     #         'Close': self.Close,
     #         'Volume': self.Volume,
     #     }
+    
 
 db.create_all()
 
+
 @app.route('/')
 def index():
-    Query = User.query
+    Query = load_data()
     return render_template('results.html', title='IEX Trading', stocks = Query )
+
 
 # @app.route('/api/data')
 # def data():
@@ -81,3 +85,6 @@ def index():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=80)
+    # Query = User.query
+    # Query = load_data()
+    # print(Query)

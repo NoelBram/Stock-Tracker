@@ -18,7 +18,7 @@ from textwrap import indent
 from xml.etree.ElementTree import tostring
 
 IEX_API = "pk_913ba7d52f144907a92856b52ea0636e"
-DATABASE_LOCATION = "sqlite:///my_stock_quotes.sqlite"
+DATABASE_LOCATION = "sqlite:///db.sqlite"
 
 
 def getStockQuote(token, symbol):
@@ -107,7 +107,7 @@ def load_data():
         print("Data valid, proceed to Load stage")
 
     # Load
-    conn = sqlite3.connect('my_stock_quotes.sqlite')
+    conn = sqlite3.connect('db.sqlite')
 
     print("Opened database successfully")
 
@@ -120,7 +120,7 @@ def load_data():
 
     conn.close()
     print("Close database successfully")
-    return df.head()
+    return df.to_numpy()
 
 if __name__ == '__main__':
     print(load_data())
