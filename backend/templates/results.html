@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<table id="data" class="table table-striped">
+<table>
   <thead>
     <tr>
       <th>Symbol</th>
@@ -14,6 +14,17 @@
     </tr>
   </thead>
   <tbody>
+    {% for stock in stocks %}
+        <tr>
+          <td>{{ stock.Symbol }}</td>
+          <td>{{ stock.Date }}</td>
+          <td>{{ stock.Open }}</td>
+          <td>{{ stock.High }}</td>
+          <td>{{ stock.Low }}</td>
+          <td>{{ stock.Close }}</td>
+          <td>{{ stock.Volume }}</td>
+        </tr>
+      {% endfor %}
   </tbody>
 </table>
 {% endblock %}
@@ -27,7 +38,7 @@
       columns: [
         {data: 'Symbol'},
         {data: 'Date'},
-        {data: 'Open'},
+        {data: 'Date'},
         {data: 'High'},
         {data: 'Low'},
         {data: 'Close'},
