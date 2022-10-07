@@ -8,14 +8,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="icon" type="image/x-icon" href="../static/assets/img/pic.png">
   </head>
-  <header id="header" class="fixed-top">
-    <div class="container-fluid d-flex justify-content-between align-items-center">
-      <div>
-        <h1 class="logo"><a href="https://noel-brambila.web.app/home" target="_blank"><img src="../static/assets/img/pic.png" class="img-fluid" alt=""> Noel Brambila</a></h1>
-      </div>
-    </div>
-  </header>
   <body>
+    <header id="header" class="fixed-top">
+      <div class="container-fluid d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="logo"><a href="https://noel-brambila.web.app/home" target="_blank"><img src="../static/assets/img/pic.png" class="img-fluid" alt=""> Noel Brambila</a></h1>
+        </div>
+      </div>
+    </header>
     <div class="table">
         <div class="title">{{ title }}</div>
         {% block content %}{% endblock %}
@@ -25,6 +25,22 @@
     <script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.js"></script>
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.js"></script>
-    {% block scripts %}{% endblock %}
+    <!-- {% block scripts %}{% endblock %} -->
+    {% block footer %}
+    <div>
+      <div id="footer">
+        <div class="copyright">
+          Copyright <strong><span>NoahBram</span></strong>. All Rights Reserved &copy; 2022
+        </div>
+        <div class="credits">
+          Created by <a href="https://www.linkedin.com/in/noelbrambila/" target="_blank">Noel Brambila</a>
+        </div>
+      </div>
+    </div>
+    {%- endblock footer %}
   </body>
 </html>
+<!-- =======================================================
+  Author: Noel Brambila
+  License: https://www.linkedin.com/in/noelbrambila/
+  ======================================================== -->
