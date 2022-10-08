@@ -34,9 +34,6 @@ def getStockQuote(token, symbol):
     return stock_quote
 
 def getStockQuoteData(stocks):
-    date = datetime.datetime.now()
-    date_y_m_d = date.strftime("%Y-%m-%d")
-
     close = []      # iexClose
     high = []       # week52High
     low = []        # week52Low
@@ -54,7 +51,7 @@ def getStockQuoteData(stocks):
             if key == "week52High": high.append(value)
             if key == "week52Low": low.append(value)
             if key == "iexOpen": open.append(value)
-            if key == "latestTime": timestamp.append(date_y_m_d)
+            if key == "latestTime": timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
             if key == "iexVolume": volume.append(value)
             if key == "symbol": symbols.append(value)
 
@@ -93,12 +90,12 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     timestamps = df["Date"].tolist()
     for timestamp in timestamps:
-        if datetime.datetime.strptime(timestamp, '%Y-%m-%d') == today:
+        if timestamp != today:
             raise Exception("At least one of the returned stock quotes does not have a today's timestamp")
 
     return True
 
-def load_data():
+def load_dataframe():
     stocks = ['aapl', 'nke']
     stock_quotes = getStockQuoteData(stocks)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
@@ -120,7 +117,7 @@ def load_data():
 
     conn.close()
     print("Close database successfully")
-    return df.to_numpy()
+    return df
 
 if __name__ == '__main__':
-    print(load_data())
+    print(load_dataframe().to_numpy())

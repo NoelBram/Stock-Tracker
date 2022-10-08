@@ -15,24 +15,24 @@
   </thead>
   <tbody>
     {% for stock in stocks %}
-        <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ stock[0] }}" role="button" aria-expanded="false" aria-controls="collapseExample">
-            <td>{{ stock[0] }}</td>
-            <td>{{ stock[1] }}</td>
-            <td>{{ stock[2] }}</td>
-            <td>{{ stock[3] }}</td>
-            <td>{{ stock[4] }}</td>
-            <td>{{ stock[5] }}</td>
-            <td>{{ stock[6] }}</td>
-        </tr>
-        <tr>
-          <td colspan="7" class="card-output">
-            <div class="collapse" id="{{ stock[0] }}">
-              <div class="card card-body">
-                Graph.png __predict stuff__
-            </div>
-          </td>
-        </tr>
-      {% endfor %}
+      <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ stock[0] }}" role="button" aria-expanded="false" aria-controls="collapseExample">
+          <td>{{ stock[0] }}</td>
+          <td>{{ stock[1] }}</td>
+          <td>{{ stock[2] }}</td>
+          <td>{{ stock[3] }}</td>
+          <td>{{ stock[4] }}</td>
+          <td>{{ stock[5] }}</td>
+          <td>{{ stock[6] }}</td>
+      </tr>
+      <tr>
+        <td colspan="7" class="card-output">
+          <div class="collapse" id="{{ stock[0] }}">
+            <div class="card card-body">
+              Graph.png __predict stuff__
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
   </tbody>
 </table>
 {% endblock %}
