@@ -21,9 +21,9 @@ IEX_API = "pk_913ba7d52f144907a92856b52ea0636e"
 DATABASE_LOCATION = "sqlite:///db.sqlite"
 
 
-def getStockQuote(token, symbol):
-    
-    endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/quote?token={token}".format(symbol = symbol, token = token)
+def getStockQuote(token, symbol, start_date, end_date):
+    # AAPL/10-Q?token=pk_913ba7d52f144907a92856b52ea0636e&from=2018-01-01&to=2019-06-01
+    endpoint = "https://cloud.iexapis.com/stable/time-series/REPORTED_FINANCIALS/{symbol}/10-Q?token={token}&from=2018-01-01&to=2019-06-01".format(symbol=symbol, token=token, a=start_date, b=end_date)
     headers = {
         "Accept" : "application/json",
         "Content-Type" : "application/json"}
@@ -33,7 +33,7 @@ def getStockQuote(token, symbol):
     
     return stock_quote
 
-def getStockQuoteData(stocks):
+def getStockQuoteData(stocks, dates):
     close = []      # iexClose
     high = []       # week52High
     low = []        # week52Low
@@ -41,12 +41,12 @@ def getStockQuoteData(stocks):
     timestamp = []  # latestTime
     volume = []     # iexVolume
     symbols = []    # symbol
-    quotes = {}
-
+    quotes_data = {}
+    
     for symbol in stocks:
-        quotes[symbol] = getStockQuote(IEX_API, symbol)
+        quotes_data[symbol] = getStockQuote(IEX_API, symbol, dates[0], dates[1])
         # Extracting only the relevant bits of data from the json object  
-        for key, value in quotes[symbol].items():    
+        for key, value in quotes_data.items():    
             if key == "iexClose": close.append(value)
             if key == "week52High": high.append(value)
             if key == "week52Low": low.append(value)
@@ -97,11 +97,14 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
 def load_dataframe():
     stocks = ['aapl', 'nke']
-    stock_quotes = getStockQuoteData(stocks)
-    stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
-    # Validate
-    if check_if_valid_data(stock_quotes_df):
-        print("Data valid, proceed to Load stage")
+    dates = ['2022-10-03', '2022-10-07']
+    stock_quotes = getStockQuoteData(stocks, dates)
+    stock_quotes_dataframes = {}
+    for quote in stock_quotes:
+        stock_quotes_dataframes[quote["Symbol"]] = pd.DataFrame(quote, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
+        # Validate
+        if check_if_valid_data(stock_quotes_dataframes[quote["Symbol"]]):
+            print("Data valid, proceed to Load stage")
 
     # Load
     conn = sqlite3.connect('db.sqlite')
@@ -109,7 +112,7 @@ def load_dataframe():
     print("Opened database successfully")
 
     try:
-        stock_quotes_df.to_sql("my_stock_quotes", conn, index=False, if_exists='replace')
+        stock_quotes_dataframes.to_sql("my_stock_quotes", conn, index=False, if_exists='replace')
     except:
         print("Data already exists in the database")
 
@@ -120,4 +123,5 @@ def load_dataframe():
     return df
 
 if __name__ == '__main__':
-    print(load_dataframe().to_numpy())
+    # print(load_dataframe().to_numpy())
+    print(load_dataframe().head())
