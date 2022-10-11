@@ -25,7 +25,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea0636e'
 db = SQLAlchemy(app)
 
-df = load_dataframe()
+# df = load_dataframe()
+df = load_chart_dataframe()
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
 df_log = minmax.transform(df.iloc[:, 4:5].astype('float32')) # Close index
@@ -265,8 +266,6 @@ def get_results():
 @app.route('/')
 def test_flask():
     Query = df.to_numpy()
-
-
     return render_template('results.html', title='IEX Trading', stocks = Query )
 
 
