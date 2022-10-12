@@ -31,41 +31,41 @@ def getStockChart(token, s, r):
     
     return stock_chart
 
+# Clean the Data
 def getStockChartDatframe(stock, r):
-    close = []      # iexClose
-    high = []       # week52High
-    low = []        # week52Low
-    open = []       # iexOpen
-    timestamp = []  # latestTime
-    volume = []     # iexVolume
-    symbols = []    # symbol
+    close = []          # close
+    adjClose = []    # fClose
+    high = []           # high
+    low = []            # lLow
+    open = []           # open
+    timestamp = []      # date
+    volume = []         # volume
     
     chart = getStockChart(IEX_API, stock, r)
     # Extracting only the relevant bits of data from the json object  
     for date in chart:
         for key, value in date.items():    
             if key == "close": close.append(value)
+            if key == "fClose": adjClose.append(value)
             if key == "high": high.append(value)
             if key == "low": low.append(value)
             if key == "open": open.append(value)
             if key == "date": timestamp.append(value)
             if key == "volume": volume.append(value)
-            if key == "symbol": symbols.append(value)
 
     stock_chart_dict = {
         "Close" : close,
+        "Adj Close" : adjClose,
         "High" : high,
         "Low" : low,
         "Open" : open,
         "Date" : timestamp,
         "Volume" : volume,
-        "Symbol" : symbols,
     }
 
     stock_chart_df = pd.DataFrame(data=stock_chart_dict)
 
     return stock_chart_df
-
 
 def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
     # Check if dataframe is empty
@@ -85,10 +85,10 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
 
     return True
 
-
 def get_chart_dataframe(stock):
-    week_range = '10d'
-    stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, week_range), columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])    
+    time = '10d'
+    # time = '1y'
+    stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
     # Validate
     if check_if_valid_chart_data(stock_chart_df):
         print("Data valid, proceed to Load stage")
@@ -125,6 +125,7 @@ def getStockQuote(token, symbol):
     
     return stock_quote
 
+# Clean the Data
 def getStockQuoteData(stocks):
     close = []      # iexClose
     high = []       # week52High
@@ -202,7 +203,10 @@ def load_dataframe():
     return df
 
 # if __name__ == '__main__':
-#     print(load_dataframe().to_numpy())
-#     print(get_chart_dataframe('aapl').to_numpy())
+    # print(load_dataframe().to_numpy())
+    # print(get_chart_dataframe('aapl').to_numpy())
+    # print(getStockChartDatframe('aapl', '10d'))
+    # print(getStockChart(IEX_API, 'aapl', '10d'))
+
 
 

@@ -1,15 +1,13 @@
 import sys
 import warnings
-import os
 if not sys.warnoptions:
     warnings.simplefilter('ignore')
 
+import os
 import tensorflow as tf
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
@@ -64,10 +62,11 @@ class Model:
         forget_bias = 0.1,
     ):
         def lstm_cell(size_layer):
-            return tf.keras.layers.LSTMCell(size_layer)
+            return tf.compat.v1.nn.rnn_cell.LSTMCell(size_layer, state_is_tuple=False)
 
-        rnn_cells = tf.keras.layers.StackedRNNCells(
-            [lstm_cell(size_layer) for _ in range(num_layers)]
+        rnn_cells = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
+            [lstm_cell(size_layer) for _ in range(num_layers)],
+            state_is_tuple = False,
         )
         self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
         self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
@@ -108,7 +107,7 @@ def forecast():
     )
     sess = tf.compat.v1.InteractiveSession()
     sess.run(tf.compat.v1.global_variables_initializer())
-    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+    date_ori = pd.to_datetime(df.iloc[:, 0]).tolist()
 
     pbar = tqdm(range(epoch), desc = 'train loop')
     for i in pbar:
@@ -186,42 +185,39 @@ def forecast():
     return deep_future
 
 def get_results():
-    # results = []
-    # for i in range(simulation_size):
-    #     print('simulation %d'%(i + 1))
-    #     results.append(forecast())
+    results = []
+    for i in range(simulation_size):
+        print('simulation %d'%(i + 1))
+        results.append(forecast())
     
-    # date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
-    # for i in range(test_size):
-    #     date_ori.append(date_ori[-1] + timedelta(days = 1))
-    # date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
-    # print(date_ori[-5:])
+    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+    for i in range(test_size):
+        date_ori.append(date_ori[-1] + timedelta(days = 1))
+    date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
+    print(date_ori[-5:])
 
-    # accepted_results = []
-    # for r in results:
-    #     if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
-    #     (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
-    #         accepted_results.append(r)
+    accepted_results = []
+    for r in results:
+        if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
+        (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
+            accepted_results.append(r)
     # len(accepted_results)
 
-    # accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
+    accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
 
-    # plt.figure(figsize = (15, 5))
-    # for no, r in enumerate(accepted_results):
-    #     plt.plot(r, label = 'forecast %d'%(no + 1))
-    # plt.plot(df['Close'], label = 'true trend', c = 'black')
-    # plt.legend()
-    # plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
+    plt.figure(figsize = (15, 5))
+    for no, r in enumerate(accepted_results):
+        plt.plot(r, label = 'forecast %d'%(no + 1))
+    plt.plot(df['Close'], label = 'true trend', c = 'black')
+    plt.legend()
+    plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
 
-    # x_range_future = np.arange(len(results[0]))
-    # plt.xticks(x_range_future[::30], date_ori[::30])
+    x_range_future = np.arange(len(results[0]))
+    plt.xticks(x_range_future[::30], date_ori[::30])
     
-    url = "{stock_name}.png".format(stock_name = STOCK_NAME)
+    url = "/backend/static/charts/{stock_name}.png".format(stock_name = STOCK_NAME)
 
-    # img = Image.new('RGB', (42, 42))
-    # img.putdata([])
-    # img.save(url)
-    # plt.savefig(url, format="png")
+    plt.savefig(url, format="png")
     full_filename = os.path.join(app.config['CHART_FOLDER'], url)
     return full_filename
 
