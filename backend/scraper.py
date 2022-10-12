@@ -31,7 +31,7 @@ def getStockChart(token, s, r):
     
     return stock_chart
 
-def getStockChartData(stock, r):
+def getStockChartDatframe(stock, r):
     close = []      # iexClose
     high = []       # week52High
     low = []        # week52Low
@@ -62,7 +62,10 @@ def getStockChartData(stock, r):
         "Symbol" : symbols,
     }
 
-    return stock_chart_dict
+    stock_chart_df = pd.DataFrame(data=stock_chart_dict)
+
+    return stock_chart_df
+
 
 def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
     # Check if dataframe is empty
@@ -74,155 +77,132 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
     if pd.Series(df['Date']).is_unique:
         pass
     else:
-        raise Exception("Primary Key check is violated")
+        raise Exception("Primary Key check is violated: At least one of the returned stock quotes has the same date")
 
     # Check for nulls
     if df.isnull().values.any():
         raise Exception("Null values found")
 
-    # Check that all timestamps are of yesterday's date
-    today = datetime.datetime.now()
-    today = today.strftime("%Y-%m-%d")
-
-
-    timestamps = df["Date"].tolist()
-    for timestamp in timestamps:
-        if timestamp != today:
-            raise Exception("At least one of the returned stock quotes does not have a today's timestamp")
-
     return True
 
 
-def load_chart_dataframe():
-    stocks = ['aapl', 'nke']
-    week_range = '5d'
-    stock_quotes = {}
-    for stock in stocks:
-        stock_quotes[stock] = getStockChartData(stock, week_range)
-    
-    df = pd.concat([pd.DataFrame([stock_quotes[stocks[i]]], columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"]) for i in range(0, len(stocks))],ignore_index=True)
+def get_chart_dataframe(stock):
+    week_range = '10d'
+    stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, week_range), columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])    
+    # Validate
+    if check_if_valid_chart_data(stock_chart_df):
+        print("Data valid, proceed to Load stage")
+    else: return pd.DataFrame()
 
+    return stock_chart_df
 
-    # # Validate
-    # if check_if_valid_chart_data(stock_charts_df):
-    #     print("Data valid, proceed to Load stage")
+def load_chart_df(stock_chart_df):
+       
+    # Load
+    conn = sqlite3.connect('db.sqlite')
+    print("Opened database successfully")
 
-    # # Load
-    # conn = sqlite3.connect('db.sqlite')
+    try:
+        stock_chart_df.to_sql("my_stock_charts", conn, index=False, if_exists='replace')
+    except:
+        print("Data already exists in the database")
 
-    # print("Opened database successfully")
+    df = pd.read_sql_query('SELECT * FROM my_stock_charts', conn, parse_dates=["date"])
 
-    # try:
-    #     stock_charts_df.to_sql("my_stock_charts", conn, index=False, if_exists='replace')
-    # except:
-    #     print("Data already exists in the database")
+    conn.close()
+    print("Close database successfully")
 
-    # df = pd.read_sql_query('SELECT * FROM my_stock_charts', conn, parse_dates=["date"])
-
-    # conn.close()
-    # print("Close database successfully")
     return df
 
-# def getStockQuote(token, symbol):
-#     endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/quote?token={token}".format(symbol = symbol, token = token)
-#     headers = {
-#         "Accept" : "application/json",
-#         "Content-Type" : "application/json"}
+def getStockQuote(token, symbol):
+    endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/quote?token={token}".format(symbol = symbol, token = token)
+    headers = {
+        "Accept" : "application/json",
+        "Content-Type" : "application/json"}
 
-#     stock_quote_request = requests.get(endpoint, headers = headers)
-#     stock_quote = stock_quote_request.json()
+    stock_quote_request = requests.get(endpoint, headers = headers)
+    stock_quote = stock_quote_request.json()
     
-#     return stock_quote
+    return stock_quote
 
-# def getStockQuoteData(stocks):
-#     close = []      # iexClose
-#     high = []       # week52High
-#     low = []        # week52Low
-#     open = []       # iexOpen
-#     timestamp = []  # latestTime
-#     volume = []     # iexVolume
-#     symbols = []    # symbol
-#     quotes = {}
+def getStockQuoteData(stocks):
+    close = []      # iexClose
+    high = []       # week52High
+    low = []        # week52Low
+    open = []       # iexOpen
+    timestamp = []  # latestTime
+    volume = []     # iexVolume
+    symbols = []    # symbol
+    quotes = {}
 
-#     for symbol in stocks:
-#         quotes[symbol] = getStockQuote(IEX_API, symbol)
-#         # Extracting only the relevant bits of data from the json object  
-#         for key, value in quotes[symbol].items():    
-#             if key == "iexClose": close.append(value)
-#             if key == "week52High": high.append(value)
-#             if key == "week52Low": low.append(value)
-#             if key == "iexOpen": open.append(value)
-#             if key == "latestTime": timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
-#             if key == "iexVolume": volume.append(value)
-#             if key == "symbol": symbols.append(value)
+    for symbol in stocks:
+        quotes[symbol] = getStockQuote(IEX_API, symbol)
+        # Extracting only the relevant bits of data from the json object  
+        for key, value in quotes[symbol].items():    
+            if key == "iexClose": close.append(value)
+            if key == "week52High": high.append(value)
+            if key == "week52Low": low.append(value)
+            if key == "iexOpen": open.append(value)
+            if key == "latestTime": timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
+            if key == "iexVolume": volume.append(value)
+            if key == "symbol": symbols.append(value)
 
-#     stock_quote_dict = {
-#         "Close" : close,
-#         "High" : high,
-#         "Low" : low,
-#         "Open" : open,
-#         "Date" : timestamp,
-#         "Volume" : volume,
-#         "Symbol" : symbols,
-#     }
+    stock_quote_dict = {
+        "Close" : close,
+        "High" : high,
+        "Low" : low,
+        "Open" : open,
+        "Date" : timestamp,
+        "Volume" : volume,
+        "Symbol" : symbols,
+    }
 
-#     return stock_quote_dict
+    return stock_quote_dict
 
-# def check_if_valid_data(df: pd.DataFrame) -> bool:
-#     # Check if dataframe is empty
-#     if df.empty:
-#         print("No stock quotes downloaded. Finishing execution")
-#         return False 
+def check_if_valid_data(df: pd.DataFrame) -> bool:
+    # Check if dataframe is empty
+    if df.empty:
+        print("No stock quotes downloaded. Finishing execution")
+        return False 
 
-#     # Primary Key Check
-#     if pd.Series(df['Symbol']).is_unique:
-#         pass
-#     else:
-#         raise Exception("Primary Key check is violated")
+    # Primary Key Check
+    if pd.Series(df['Symbol']).is_unique:
+        pass
+    else:
+        raise Exception("Primary Key check is violated: At least one of the returned stock quotes has the same symblol")
 
-#     # Check for nulls
-#     if df.isnull().values.any():
-#         raise Exception("Null values found")
+    # Check for nulls
+    if df.isnull().values.any():
+        raise Exception("Null values found")
 
-#     # Check that all timestamps are of yesterday's date
-#     today = datetime.datetime.now()
-#     today = today.strftime("%Y-%m-%d")
+    return True
 
+def load_dataframe():
+    stocks = ['aapl', 'nke']
+    stock_quotes = getStockQuoteData(stocks)
+    stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
+    # Validate
+    if check_if_valid_data(stock_quotes_df):
+        print("Data valid, proceed to Load stage")
 
-#     timestamps = df["Date"].tolist()
-#     for timestamp in timestamps:
-#         if timestamp != today:
-#             raise Exception("At least one of the returned stock quotes does not have a today's timestamp")
+    # Load
+    conn = sqlite3.connect('db.sqlite')
 
-#     return True
+    print("Opened database successfully")
 
-# def load_dataframe():
-#     stocks = ['aapl', 'nke']
-#     week_range = '5dm'
-#     stock_quotes = getStockQuoteData(stocks)
-#     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
-#     # Validate
-#     if check_if_valid_data(stock_quotes_df):
-#         print("Data valid, proceed to Load stage")
+    try:
+        stock_quotes_df.to_sql("my_stock_quotes", conn, index=False, if_exists='replace')
+    except:
+        print("Data already exists in the database")
 
-#     # Load
-#     conn = sqlite3.connect('db.sqlite')
+    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
 
-#     print("Opened database successfully")
+    conn.close()
+    print("Close database successfully")
+    return df
 
-#     try:
-#         stock_quotes_df.to_sql("my_stock_quotes", conn, index=False, if_exists='replace')
-#     except:
-#         print("Data already exists in the database")
+# if __name__ == '__main__':
+#     print(load_dataframe().to_numpy())
+#     print(get_chart_dataframe('aapl').to_numpy())
 
-#     df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
-
-#     conn.close()
-#     print("Close database successfully")
-#     return df
-
-if __name__ == '__main__':
-    # print(load_dataframe().to_numpy())
-    # print(load_chart_dataframe().to_numpy())
-    print(load_chart_dataframe().head())
 

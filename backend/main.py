@@ -1,11 +1,13 @@
 import sys
 import warnings
-
+import os
 if not sys.warnoptions:
     warnings.simplefilter('ignore')
 
 import tensorflow as tf
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
@@ -13,20 +15,25 @@ from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
 from datetime import timedelta
 from tqdm import tqdm
-sns.set()
-tf.compat.v1.random.set_random_seed(1234)
 
-from flask import Flask, render_template, request, jsonify
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+from flask import Flask, Response, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from scraper import *
 
+CHARTS_FOLDER = os.path.join('static', 'charts')
+
 app = Flask(__name__)
+app.config['CHART_FOLDER'] = CHARTS_FOLDER
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea0636e'
 db = SQLAlchemy(app)
 
-# df = load_dataframe()
-df = load_chart_dataframe()
+stocks_df = load_dataframe()
+
+STOCK_NAME = 'aapl'
+df = get_chart_dataframe(STOCK_NAME)
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
 df_log = minmax.transform(df.iloc[:, 4:5].astype('float32')) # Close index
@@ -57,11 +64,10 @@ class Model:
         forget_bias = 0.1,
     ):
         def lstm_cell(size_layer):
-            return tf.compat.v1.nn.rnn_cell.LSTMCell(size_layer, state_is_tuple=False)
+            return tf.keras.layers.LSTMCell(size_layer)
 
-        rnn_cells = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
-            [lstm_cell(size_layer) for _ in range(num_layers)],
-            state_is_tuple = False,
+        rnn_cells = tf.keras.layers.StackedRNNCells(
+            [lstm_cell(size_layer) for _ in range(num_layers)]
         )
         self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
         self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
@@ -180,43 +186,44 @@ def forecast():
     return deep_future
 
 def get_results():
-    results = []
-    for i in range(simulation_size):
-        print('simulation %d'%(i + 1))
-        results.append(forecast())
+    # results = []
+    # for i in range(simulation_size):
+    #     print('simulation %d'%(i + 1))
+    #     results.append(forecast())
     
-    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
-    for i in range(test_size):
-        date_ori.append(date_ori[-1] + timedelta(days = 1))
-    date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
-    print(date_ori[-5:])
+    # date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+    # for i in range(test_size):
+    #     date_ori.append(date_ori[-1] + timedelta(days = 1))
+    # date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
+    # print(date_ori[-5:])
 
-    accepted_results = []
-    for r in results:
-        if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
-        (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
-            accepted_results.append(r)
-    len(accepted_results)
+    # accepted_results = []
+    # for r in results:
+    #     if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
+    #     (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
+    #         accepted_results.append(r)
+    # len(accepted_results)
 
-    accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
+    # accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
 
-    plt.figure(figsize = (15, 5))
-    for no, r in enumerate(accepted_results):
-        plt.plot(r, label = 'forecast %d'%(no + 1))
-    plt.plot(df['Close'], label = 'true trend', c = 'black')
-    plt.legend()
-    plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
+    # plt.figure(figsize = (15, 5))
+    # for no, r in enumerate(accepted_results):
+    #     plt.plot(r, label = 'forecast %d'%(no + 1))
+    # plt.plot(df['Close'], label = 'true trend', c = 'black')
+    # plt.legend()
+    # plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
 
-    x_range_future = np.arange(len(results[0]))
-    plt.xticks(x_range_future[::30], date_ori[::30])
+    # x_range_future = np.arange(len(results[0]))
+    # plt.xticks(x_range_future[::30], date_ori[::30])
+    
+    url = "{stock_name}.png".format(stock_name = STOCK_NAME)
 
-    plt.show()
-
-    # Query = df.to_numpy()
-
-
-    # return render_template('results.html', title='IEX Trading', stocks = Query )
-
+    # img = Image.new('RGB', (42, 42))
+    # img.putdata([])
+    # img.save(url)
+    # plt.savefig(url, format="png")
+    full_filename = os.path.join(app.config['CHART_FOLDER'], url)
+    return full_filename
 
 # @app.route('/api/data')
 # def data():
@@ -265,13 +272,11 @@ def get_results():
 
 @app.route('/')
 def test_flask():
-    Query = df.to_numpy()
-    return render_template('results.html', title='IEX Trading', stocks = Query )
+    stocks = stocks_df.to_numpy()
+    img_src = get_results()
+    return render_template('results.html', title='IEX Trading', stocks = stocks, img_src= img_src)
 
 
 if __name__ == '__main__':
-    # index()
     app.run(host="0.0.0.0", port=80)
-    # Query = User.query
-    # Query = load_data()
-    # print(Query)
+    # image_url = get_results()
