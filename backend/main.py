@@ -23,7 +23,7 @@ from scraper import *
 CHARTS_FOLDER = os.path.join('static', 'charts')
 
 app = Flask(__name__)
-app.config['CHART_FOLDER'] = CHARTS_FOLDER
+# app.config['CHART_FOLDER'] = CHARTS_FOLDER
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea0636e'
 db = SQLAlchemy(app)
@@ -218,8 +218,8 @@ def get_results():
     url = "/backend/static/charts/{stock_name}.png".format(stock_name = STOCK_NAME)
 
     plt.savefig(url, format="png")
-    full_filename = os.path.join(app.config['CHART_FOLDER'], url)
-    return full_filename
+    # full_filename = os.path.join(app.config['CHART_FOLDER'], url)
+    return url
 
 # @app.route('/api/data')
 # def data():
