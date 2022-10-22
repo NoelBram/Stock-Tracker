@@ -28,9 +28,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea0636e'
 db = SQLAlchemy(app)
 
-stocks_df = load_dataframe()
+stocks_df = load_stocks_df()
 
 STOCK_NAME = 'aapl'
+load_stock_chart_df(STOCK_NAME)
 df = get_chart_dataframe(STOCK_NAME)
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
@@ -62,7 +63,7 @@ class Model:
         forget_bias = 0.1,
     ):
         def lstm_cell(size_layer):
-            return tf.compat.v1.nn.rnn_cell.LSTMCell(size_layer, state_is_tuple=False)
+            return tf.keras.layers.LSTMCell(size_layer)
 
         rnn_cells = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
             [lstm_cell(size_layer) for _ in range(num_layers)],

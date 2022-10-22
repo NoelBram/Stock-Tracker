@@ -19,6 +19,7 @@ from xml.etree.ElementTree import tostring
 
 IEX_API = "pk_913ba7d52f144907a92856b52ea0636e"
 DATABASE_LOCATION = "sqlite:///db.sqlite"
+conn = sqlite3.connect('db.sqlite')
 
 def getStockChart(token, s, r):
     endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/chart/{range}?token={token}&chartByDay=true".format(symbol = s, range = r, token = token)
@@ -85,7 +86,7 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_chart_dataframe(stock):
+def load_stock_chart_df(stock):
     time = '10d'
     # time = '1y'
     stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
@@ -94,22 +95,19 @@ def get_chart_dataframe(stock):
         print("Data valid, proceed to Load stage")
     else: return pd.DataFrame()
 
-    return stock_chart_df
-
-def load_chart_df(stock_chart_df):
-       
     # Load
-    conn = sqlite3.connect('db.sqlite')
     print("Opened database successfully")
 
     try:
-        stock_chart_df.to_sql("my_stock_charts", conn, index=False, if_exists='replace')
+        stock_chart_df.to_sql("{stock}_chart".format(stock = stock), conn, index=False, if_exists='replace')
     except:
         print("Data already exists in the database")
+    return get_chart_dataframe(stock)
 
-    df = pd.read_sql_query('SELECT * FROM my_stock_charts', conn, parse_dates=["date"])
+def get_chart_dataframe(stock):    
+    df = pd.read_sql_query("SELECT * FROM {stock}_chart".format(stock = stock), conn, parse_dates=["date"])
 
-    conn.close()
+    conn.commit()
     print("Close database successfully")
 
     return df
@@ -132,7 +130,7 @@ def getStockQuoteData(stocks):
     low = []        # week52Low
     open = []       # iexOpen
     timestamp = []  # latestTime
-    volume = []     # iexVolume
+    volume = []     # latestVolume
     symbols = []    # symbol
     quotes = {}
 
@@ -145,7 +143,7 @@ def getStockQuoteData(stocks):
             if key == "week52Low": low.append(value)
             if key == "iexOpen": open.append(value)
             if key == "latestTime": timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
-            if key == "iexVolume": volume.append(value)
+            if key == "latestVolume": volume.append(value)
             if key == "symbol": symbols.append(value)
 
     stock_quote_dict = {
@@ -178,7 +176,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def load_dataframe():
+def load_stocks_df():
     stocks = ['aapl', 'nke']
     stock_quotes = getStockQuoteData(stocks)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
@@ -187,8 +185,6 @@ def load_dataframe():
         print("Data valid, proceed to Load stage")
 
     # Load
-    conn = sqlite3.connect('db.sqlite')
-
     print("Opened database successfully")
 
     try:
@@ -196,16 +192,20 @@ def load_dataframe():
     except:
         print("Data already exists in the database")
 
-    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["symbol"])
+    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["Symbol"])
 
-    conn.close()
+    conn.commit()
     print("Close database successfully")
     return df
 
 # if __name__ == '__main__':
-    # print(load_dataframe().to_numpy())
+#     STOCK_NAME = 'aapl'
+#     print(load_stock_chart_df(STOCK_NAME).to_numpy())
+    # print(load_stocks_df().to_numpy())
     # print(get_chart_dataframe('aapl').to_numpy())
-    # print(getStockChartDatframe('aapl', '10d'))
+    # print(getStockQuote(IEX_API, 'aapl'))
+    # stocks = ['aapl', 'nke']
+    # print(getStockQuoteData(stocks))
     # print(getStockChart(IEX_API, 'aapl', '10d'))
 
 
