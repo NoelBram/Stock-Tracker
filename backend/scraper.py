@@ -13,6 +13,7 @@ import requests
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 import json
+import streamlit as st
 import sqlite3
 from textwrap import indent
 from xml.etree.ElementTree import tostring
@@ -20,6 +21,11 @@ from xml.etree.ElementTree import tostring
 IEX_API = "pk_913ba7d52f144907a92856b52ea0636e"
 DATABASE_LOCATION = "sqlite:///db.sqlite"
 conn = sqlite3.connect('db.sqlite')
+
+# Sidebar
+st.sidebar.subheader('Query parameters')
+start_date = st.sidebar.date_input("Start date", datetime.date(2019, 1, 1))
+end_date = st.sidebar.date_input("End date", datetime.date(2021, 1, 31))
 
 def getStockChart(token, s, r):
     endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/chart/{range}?token={token}&chartByDay=true".format(symbol = s, range = r, token = token)
@@ -86,7 +92,7 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def load_stock_chart_df(stock):
+def get_stock_df(stock):
     time = '10d'
     # time = '1y'
     stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
@@ -102,14 +108,12 @@ def load_stock_chart_df(stock):
         stock_chart_df.to_sql("{stock}_chart".format(stock = stock), conn, index=False, if_exists='replace')
     except:
         print("Data already exists in the database")
-    return get_chart_dataframe(stock)
-
-def get_chart_dataframe(stock):    
+        return pd.DataFrame()
+    
     df = pd.read_sql_query("SELECT * FROM {stock}_chart".format(stock = stock), conn, parse_dates=["date"])
 
     conn.commit()
     print("Close database successfully")
-
     return df
 
 def getStockQuote(token, symbol):
@@ -130,7 +134,7 @@ def getStockQuoteData(stocks):
     low = []        # week52Low
     open = []       # iexOpen
     timestamp = []  # latestTime
-    volume = []     # latestVolume
+    volume = []     # iexVolume
     symbols = []    # symbol
     quotes = {}
 
@@ -142,8 +146,14 @@ def getStockQuoteData(stocks):
             if key == "week52High": high.append(value)
             if key == "week52Low": low.append(value)
             if key == "iexOpen": open.append(value)
-            if key == "latestTime": timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
-            if key == "latestVolume": volume.append(value)
+            if key == "latestTime": 
+                try: 
+                    timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
+                except ValueError:
+                    date = datetime.datetime.now()
+                    today = date.strftime("%Y-%m-%d")
+                    timestamp.append(today)
+            if key == "iexVolume": volume.append(value)
             if key == "symbol": symbols.append(value)
 
     stock_quote_dict = {
@@ -172,6 +182,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     # Check for nulls
     if df.isnull().values.any():
+        print(df.head())
         raise Exception("Null values found")
 
     return True
@@ -198,11 +209,9 @@ def load_stocks_df():
     print("Close database successfully")
     return df
 
-# if __name__ == '__main__':
-#     STOCK_NAME = 'aapl'
-#     print(load_stock_chart_df(STOCK_NAME).to_numpy())
-    # print(load_stocks_df().to_numpy())
-    # print(get_chart_dataframe('aapl').to_numpy())
+if __name__ == '__main__':
+    STOCK_NAME = 'aapl'
+    print(get_stock_df(STOCK_NAME))
     # print(getStockQuote(IEX_API, 'aapl'))
     # stocks = ['aapl', 'nke']
     # print(getStockQuoteData(stocks))

@@ -4,8 +4,10 @@ if not sys.warnoptions:
     warnings.simplefilter('ignore')
 
 import os
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -31,8 +33,7 @@ db = SQLAlchemy(app)
 stocks_df = load_stocks_df()
 
 STOCK_NAME = 'aapl'
-load_stock_chart_df(STOCK_NAME)
-df = get_chart_dataframe(STOCK_NAME)
+df = get_stock_df(STOCK_NAME)
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
 df_log = minmax.transform(df.iloc[:, 4:5].astype('float32')) # Close index
@@ -63,22 +64,21 @@ class Model:
         forget_bias = 0.1,
     ):
         def lstm_cell(size_layer):
-            return tf.keras.layers.LSTMCell(size_layer)
+            return tf.keras.layers.LSTMCell(size_layer, return_sequences=True, return_state=True)
 
-        rnn_cells = tf.compat.v1.nn.rnn_cell.MultiRNNCell(
-            [lstm_cell(size_layer) for _ in range(num_layers)],
-            state_is_tuple = False,
-        )
+        rnn_cells = [lstm_cell(size_layer) for _ in range(num_layers)]
+        stacked_lstm = tf.keras.layers.StackedRNNCells(rnn_cells)
+        
         self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
         self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
         drop = tf.compat.v1.nn.rnn_cell.DropoutWrapper(
-            rnn_cells, output_keep_prob = forget_bias
+            stacked_lstm, output_keep_prob = forget_bias
         )
         self.hidden_layer = tf.compat.v1.placeholder(
             tf.float32, (None, num_layers * 2 * size_layer)
         )
-        self.outputs, self.last_state = tf.compat.v1.nn.dynamic_rnn(
-            drop, self.X, initial_state = self.hidden_layer, dtype = tf.float32
+        self.outputs, self.last_state = tf.keras.layers.RNN(
+            drop, self.X, return_sequences = self.hidden_layer, dtype = tf.float32
         )
         self.logits = tf.compat.v1.layers.dense(self.outputs[-1], output_size)
         self.cost = tf.compat.v1.reduce_mean(tf.square(self.Y - self.logits))
@@ -269,9 +269,11 @@ def get_results():
 
 @app.route('/')
 def test_flask():
-    stocks = stocks_df.to_numpy()
-    img_src = get_results()
-    return render_template('results.html', title='IEX Trading', stocks = stocks, img_src= img_src)
+    # stocks = stocks_df.to_numpy()
+    # img_src = get_results()
+    # return render_template('results.html', title='IEX Trading', stocks = stocks, img_src= img_src)
+    return render_template('results.html', title='IEX Trading')
+
 
 
 if __name__ == '__main__':
