@@ -30,28 +30,23 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///db.sqlite'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea0636e'
 db = SQLAlchemy(app)
 
-stocks_df = load_stocks_df()
+stocks_df = get_stock_df()
 
 STOCK_NAME = 'aapl'
-df = get_stock_df(STOCK_NAME)
+df = get_stock_chart_df(STOCK_NAME)
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
 df_log = minmax.transform(df.iloc[:, 4:5].astype('float32')) # Close index
 df_log = pd.DataFrame(df_log)
-df_log.head()
+print(df_log.head())
 
-simulation_size = 10
-num_layers = 1
-size_layer = 128
-timestamp = 5
-epoch = 300
-dropout_rate = 0.8
 test_size = 30
-learning_rate = 0.01
+simulation_size = 10
 
-df_train = df_log
-df.shape, df_train.shape
-tf.compat.v1.disable_eager_execution()
+df_train = df_log.iloc[:-test_size]
+df_test = df_log.iloc[-test_size:]
+nfeatures = 7
+print("df.shape = {df}, df_train.shape = {df_train}, df_test.shape = {df_test}".format(df = df.shape, df_train = df_train.shape, df_test = df_test.shape))
 
 class Model:
     def __init__(
@@ -63,24 +58,25 @@ class Model:
         output_size,
         forget_bias = 0.1,
     ):
+        tf.compat.v1.disable_eager_execution()
         def lstm_cell(size_layer):
-            return tf.keras.layers.LSTMCell(size_layer, return_sequences=True, return_state=True)
+            return layers.LSTMCell(size_layer)
 
         rnn_cells = [lstm_cell(size_layer) for _ in range(num_layers)]
-        stacked_lstm = tf.keras.layers.StackedRNNCells(rnn_cells)
-        
+        stacked_lstm = layers.StackedRNNCells(rnn_cells)
+
         self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
         self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
-        drop = tf.compat.v1.nn.rnn_cell.DropoutWrapper(
+        drop = tf.nn.RNNCellDropoutWrapper(
             stacked_lstm, output_keep_prob = forget_bias
         )
         self.hidden_layer = tf.compat.v1.placeholder(
             tf.float32, (None, num_layers * 2 * size_layer)
         )
-        self.outputs, self.last_state = tf.keras.layers.RNN(
-            drop, self.X, return_sequences = self.hidden_layer, dtype = tf.float32
+        self.outputs, self.last_state = tf.nn.dynamic_rnn(
+            drop, self.X, initial_state = self.hidden_layer, dtype = tf.float32
         )
-        self.logits = tf.compat.v1.layers.dense(self.outputs[-1], output_size)
+        self.logits = layers.Dense(self.outputs[-1], output_size)
         self.cost = tf.compat.v1.reduce_mean(tf.square(self.Y - self.logits))
         self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate).minimize(
             self.cost
@@ -100,7 +96,15 @@ def anchor(signal, weight):
         buffer.append(smoothed_val)
         last = smoothed_val
     return buffer
- 
+
+num_layers = 1
+size_layer = 128
+timestamp = 5
+epoch = 300
+dropout_rate = 0.8
+future_day = test_size
+learning_rate = 0.01
+
 def forecast():
     tf.compat.v1.reset_default_graph()
     modelnn = Model(
@@ -269,10 +273,11 @@ def get_results():
 
 @app.route('/')
 def test_flask():
-    # stocks = stocks_df.to_numpy()
+    stocks = stocks_df.to_numpy()
     # img_src = get_results()
-    # return render_template('results.html', title='IEX Trading', stocks = stocks, img_src= img_src)
-    return render_template('results.html', title='IEX Trading')
+    img_src = None
+    return render_template('results.html', title='IEX Trading', stocks = stocks, img_src= img_src)
+    # return render_template('results.html', title='IEX Trading')
 
 
 

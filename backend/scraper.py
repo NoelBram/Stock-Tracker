@@ -92,9 +92,9 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_stock_df(stock):
-    time = '10d'
-    # time = '1y'
+def get_stock_chart_df(stock):
+    # time = '10d'
+    time = '1y'
     stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
     # Validate
     if check_if_valid_chart_data(stock_chart_df):
@@ -187,10 +187,11 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def load_stocks_df():
+def get_stock_df():
     stocks = ['aapl', 'nke']
     stock_quotes = getStockQuoteData(stocks)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
+
     # Validate
     if check_if_valid_data(stock_quotes_df):
         print("Data valid, proceed to Load stage")
@@ -203,19 +204,21 @@ def load_stocks_df():
     except:
         print("Data already exists in the database")
 
-    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn, parse_dates=["Symbol"])
+    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
 
     conn.commit()
     print("Close database successfully")
     return df
 
 if __name__ == '__main__':
-    STOCK_NAME = 'aapl'
-    print(get_stock_df(STOCK_NAME))
+    # STOCK_NAME = 'aapl'
+    # print(get_stock_chart_df(STOCK_NAME))
+    # print(getStockChart(IEX_API, 'aapl', '10d'))
     # print(getStockQuote(IEX_API, 'aapl'))
     # stocks = ['aapl', 'nke']
     # print(getStockQuoteData(stocks))
-    # print(getStockChart(IEX_API, 'aapl', '10d'))
+    print(get_stock_df())
+    
 
 
 
