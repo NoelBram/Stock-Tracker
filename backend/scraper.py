@@ -32,19 +32,8 @@ st.sidebar.subheader('Query parameters')
 start_date = st.sidebar.date_input("Start date", datetime.date(2019, 1, 1))
 end_date = st.sidebar.date_input("End date", datetime.date(2021, 1, 31))
 
-def getStockChart(token, s, r):
-    endpoint = "https://cloud.iexapis.com/stable/stock/{symbol}/chart/{range}?token={token}&chartByDay=true".format(symbol = s, range = r, token = token)
-    headers = {
-        "Accept" : "application/json",
-        "Content-Type" : "application/json"}
 
-    stock_chart_request = requests.get(endpoint, headers = headers)
-    stock_chart = stock_chart_request.json()
-    
-    return stock_chart
-
-# Clean the Data
-def getStockChartDatframe(stock, r):
+def get_stock_chart_datframe(stock, r):
     close = []          # close
     adjClose = []    # fClose
     high = []           # high
@@ -53,7 +42,7 @@ def getStockChartDatframe(stock, r):
     timestamp = []      # date
     volume = []         # volume
     
-    chart = getStockChart(POLYGON_API, stock, r)
+    chart = get_stock_chart(POLYGON_API_KEY, stock, r)
     # Extracting only the relevant bits of data from the json object  
     for date in chart:
         for key, value in date.items():    
@@ -100,7 +89,7 @@ def check_if_valid_chart_data(df: pd.DataFrame) -> bool:
 def get_stock_chart_df(stock):
     # time = '10d'
     time = '1y'
-    stock_chart_df = pd.DataFrame(getStockChartDatframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
+    stock_chart_df = pd.DataFrame(get_stock_chart_datframe(stock, time), columns = ["Date", "Open", "High", "Low", "Close", "Adj Close", "Volume"])    
     # Validate
     if check_if_valid_chart_data(stock_chart_df):
         print("Data valid, proceed to Load stage")
@@ -121,7 +110,8 @@ def get_stock_chart_df(stock):
     print("Close database successfully")
     return df
 
-def getStockQuote(symbol, dateA, dataB):
+# Extract: get stock data
+def get_stock_quote(symbol, dateA, dataB):
     client = RESTClient(POLYGON_API_KEY) # api_key is used
     quotes = cast(
         HTTPResponse,
@@ -136,36 +126,25 @@ def getStockQuote(symbol, dateA, dataB):
     ).data.decode('utf-8')   
     return json.loads(quotes)
 
-# Get many stocks and clean the data
-def getStockQuoteData(stocks, dateA, dataB):
-    close = []      # iexClose
-    high = []       # week52High
-    low = []        # week52Low
-    open = []       # iexOpen
-    timestamp = []  # latestTime
-    volume = []     # iexVolume
-    symbols = []    # symbol
-    quotes = {}
+# Transform: clean the data
+def get_stock_quote_data(symbol, dateA, dataB):
+    close = []      
+    high = []       
+    low = []        
+    open = []       
+    volume = []     
 
-    for symbol in stocks:
-        quotes[symbol] = getStockQuote(symbol, dateA, dataB)
-        # Extracting only the relevant bits of data from the json object 
-    
-        symbols += [quotes[symbol].get('ticker')] * quotes[symbol].get('count')
-             
-        for quote in quotes[symbol].get('results')[:]:
-            close.append(quote["c"])
-            high.append(quote["h"])
-            low.append(quote["l"])
-            open.append(quote["o"])
-            open.append(quote["t"])
-                # try: 
-                #     timestamp.append(datetime.datetime.strptime(value, "%B %d, %Y").strftime("%Y-%m-%d"))
-                # except ValueError:
-                #     date = datetime.datetime.now()
-                #     today = date.strftime("%Y-%m-%d")
-                #     timestamp.append(today)
-            volume.append(quote["v"])
+    # Extracting only the relevant bits of data from the json object 
+    ticker = get_stock_quote(symbol, dateA, dataB)
+    symbols = [ticker.get('ticker')] * ticker.get('count')
+    timestamp = pd.date_range(dateA, dataB).strftime("%Y-%m-%d").tolist()
+            
+    for quote in ticker.get('results')[:]:
+        close.append(quote["c"])
+        high.append(quote["h"])
+        low.append(quote["l"])
+        open.append(quote["o"])
+        volume.append(quote["v"])
                         
     stock_quote_dict = {
         "Close" : close,
@@ -200,7 +179,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
 def get_stock_df():
     stocks = ['aapl', 'nke']
-    stock_quotes = getStockQuoteData(stocks)
+    stock_quotes = get_stock_quote_data(stocks)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"])
 
     # Validate
@@ -224,11 +203,13 @@ def get_stock_df():
 if __name__ == '__main__':
     STOCK_NAME = 'AAPL'
     STOCKS = ['AAPL', 'NKE']
-    # print(getStockQuote(STOCK_NAME, "2022-04-04", "2022-04-08"))
-    print(getStockQuoteData(STOCKS, "2022-04-04", "2022-04-08"))
-    # print(get_stock_chart_df(STOCK_NAME))
-    # print(getStockChart(RAPID_API, STOCK_NAME, '10d'))
+    # print(get_stock_quote(STOCK_NAME, "2022-04-04", "2022-04-08"))
+    print(get_stock_quote_data(STOCK_NAME, "2022-04-04", "2022-04-08"))
+
     # print(get_stock_df())
+
+    # print(get_stock_chart_df(STOCK_NAME))
+    # print(get_stock_chart(RAPID_API, STOCK_NAME, '10d'))
     
 
 
