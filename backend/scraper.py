@@ -24,7 +24,7 @@ from collections import ChainMap
 
 
 POLYGON_API_KEY = '3MF64zqXMDhh62DUOAC0Lduj7MpIXlmC'
-DATABASE_LOCATION = 'sqlite:///db.sqlite'
+dateBASE_LOCATION = 'sqlite:///db.sqlite'
 conn = sqlite3.connect('db.sqlite')
 
 # Sidebar
@@ -34,7 +34,7 @@ end_date = st.sidebar.date_input('End date', datetime.date(2021, 1, 31))
 
 
 # Extract: get stock data
-def get_stock_quote(symbol, dateA, dataB):
+def get_stock_quote(symbol, dateA, dateB):
     client = RESTClient(POLYGON_API_KEY) # api_key is used
     quotes = cast(
         HTTPResponse,
@@ -43,24 +43,33 @@ def get_stock_quote(symbol, dateA, dataB):
             1,
             'day',
             dateA,
-            dataB,
+            dateB,
             raw=True,
         ),
     ).data.decode('utf-8')   
     return json.loads(quotes)
 
 # Transform: clean the data
-def get_stock_quote_data(symbol, dateA, dataB):
+def get_stock_quote_data(symbol, dateA, dateB):
     close = []      
     high = []       
     low = []        
     open = []       
+    symbols = []
     volume = []     
 
     # Extracting only the relevant bits of data from the json object 
-    ticker = get_stock_quote(symbol, dateA, dataB)
-    symbols = [ticker.get('ticker')] * ticker.get('count')
-    timestamp = pd.date_range(dateA, dataB).strftime('%Y-%m-%d').tolist()
+    ticker = get_stock_quote(symbol, dateA, dateB)
+    try :
+        symbols = [ticker.get('ticker')] * ticker.get('count')
+    except TypeError:
+        print('\n<--- Error: You entered a date that has no results, please choose a weekday other than today. --->\n')
+        return
+    # try:
+    #     symbols = [ticker.get('ticker')] * ticker.get('count')
+    # except TypeError:
+    #     symbols = [ticker.get('ticker')] * 1
+    timestamp = pd.date_range(dateA, dateB).strftime('%Y-%m-%d').tolist()
             
     for quote in ticker.get('results')[:]:
         close.append(quote['c'])
@@ -100,39 +109,33 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_stock_df(sybol, dateA, dataB):
-    stock_quotes = get_stock_quote_data(sybol, dateA, dataB)
+def get_stock_df(sybol, dateA, dateB):
+    stock_quotes = get_stock_quote_data(sybol, dateA, dateB)
     stock_quotes_df = pd.DataFrame(stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
-
     # Validate
     if check_if_valid_data(stock_quotes_df):
         print('Data valid, proceed to Load stage')
 
     # Load
-    print('Opened database successfully')
+    print('Opened dateBase successfully')
 
     try:
         stock_quotes_df.to_sql('my_stock_quotes', conn, index=False, if_exists='replace')
     except:
-        print('Data already exists in the database')
+        print('Data already exists in the dateBase')
 
     df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
 
     conn.commit()
-    print('Close database successfully')
+    print('Close dateBase successfully')
     return df
 
-if __name__ == '__main__':
-    STOCK_NAME = 'AAPL'
-#     STOCKS = ['AAPL', 'NKE']
-    # print(get_stock_quote(STOCK_NAME, '2022-04-04', '2022-04-08'))
-    # print(get_stock_quote_data(STOCK_NAME, '2022-04-04', '2022-04-08'))
-
-    print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
-
-    # print(get_stock_chart_df(STOCK_NAME))
-    # print(get_stock_chart(RAPID_API, STOCK_NAME, '10d'))
-    
+# if __name__ == '__main__':
+#     STOCK_NAME = 'AAPL'
+# #     STOCKS = ['AAPL', 'NKE']
+#     # print(get_stock_quote(STOCK_NAME, '2022-04-04', '2022-04-08'))
+#     # print(get_stock_quote_data(STOCK_NAME, '2022-04-04', '2022-04-08'))
+#     print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
 
 
 

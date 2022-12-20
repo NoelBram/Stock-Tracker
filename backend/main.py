@@ -1,15 +1,24 @@
+#Flask imports
+from flask import Flask, render_template, send_file, make_response, url_for, Response
 import sys
 import warnings
 if not sys.warnoptions:
     warnings.simplefilter('ignore')
 
 import os
+import io
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+import pandas as pd
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
@@ -18,7 +27,6 @@ from tqdm import tqdm
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-from flask import Flask, Response, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from scraper import *
 
@@ -31,6 +39,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea06
 db = SQLAlchemy(app)
 
 STOCK_NAME = 'AAPL'
+IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 df = get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08')
 
 minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
@@ -187,54 +196,80 @@ def forecast():
     
     return deep_future
 
-def get_results():
-    results = []
-    for i in range(simulation_size):
-        print('simulation %d'%(i + 1))
-        results.append(forecast())
+# def get_results():
+#     results = []
+#     for i in range(simulation_size):
+#         print('simulation %d'%(i + 1))
+#         results.append(forecast())
     
-    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
-    for i in range(test_size):
-        date_ori.append(date_ori[-1] + timedelta(days = 1))
-    date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
-    print(date_ori[-5:])
+#     date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+#     for i in range(test_size):
+#         date_ori.append(date_ori[-1] + timedelta(days = 1))
+#     date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
+#     print(date_ori[-5:])
 
-    accepted_results = []
-    for r in results:
-        if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
-        (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
-            accepted_results.append(r)
-    # len(accepted_results)
+#     accepted_results = []
+#     for r in results:
+#         if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
+#         (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
+#             accepted_results.append(r)
+#     # len(accepted_results)
 
-    accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
+#     accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
 
-    plt.figure(figsize = (15, 5))
-    for no, r in enumerate(accepted_results):
-        plt.plot(r, label = 'forecast %d'%(no + 1))
-    plt.plot(df['Close'], label = 'true trend', c = 'black')
-    plt.legend()
-    plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
+#     plt.figure(figsize = (15, 5))
+#     for no, r in enumerate(accepted_results):
+#         plt.plot(r, label = 'forecast %d'%(no + 1))
+#     plt.plot(df['Close'], label = 'true trend', c = 'black')
+#     plt.legend()
+#     plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
 
-    x_range_future = np.arange(len(results[0]))
-    plt.xticks(x_range_future[::30], date_ori[::30])
+#     x_range_future = np.arange(len(results[0]))
+#     plt.xticks(x_range_future[::30], date_ori[::30])
     
-    url = '/static/charts/{stock_name}.png'.format(stock_name = STOCK_NAME)
+#     url = '/static/charts/{stock_name}.png'.format(stock_name = STOCK_NAME)
 
-    plt.savefig(url, format='png')
-    # full_filename = os.path.join(app.config['CHART_FOLDER'], url)
-    return url
+#     plt.savefig(url, format='png')
+#     # full_filename = os.path.join(app.config['CHART_FOLDER'], url)
+#     return url
 
-def get_df_graph(df):
-    plt.figure(figsize = (15, 5))
-    df.plot(kind = 'scatter',
-        x = 'Date',
-        y = 'Close',
-        color = 'red')
+# def get_df_graph(df):
+#     # transpose and plot
+#     plt = df.plot(x = 'Date', y = 'High', figsize=(7, 6))
+#     plt.set_ylabel('Stock Price (USD)', fontsize=12)
+#     plt.set_xlabel('Date (YYYY-MM-DD)', fontsize=12)
+#     plt.figure.savefig(IMAGE_URL, format='png')
+#     return IMAGE_URL[7:]
 
-    url = 'backend/static/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 
-    plt.savefig(url, format='png')
-    return url[7:]
+@app.route('/')
+@app.route('/results', methods=("POST", "GET"))
+def results():
+    stocks = df.to_numpy()
+    return render_template('results.html', title='Stock Forcasting', stocks = stocks)
+    # return render_template('results.html', title='IEX Trading')
+
+
+@app.route('/plot.png')
+def plot_png():
+    fig = create_figure(df)
+    output = io.BytesIO()
+    FigureCanvas(fig).print_png(output)
+    return Response(output.getvalue(), mimetype='image/png')
+
+def create_figure(df):
+    fig, ax = plt.subplots(figsize = (6,4))
+    fig.patch.set_facecolor('#E8E5DA')
+
+    x = df['Date']
+    y = df['High']
+
+    ax.bar(x, y, color = "#304C89")
+
+    plt.ylabel('Stock Price (USD)', fontsize=12)
+    plt.xlabel('Date (YYYY-MM-DD)', fontsize=12)
+
+    return fig
 # @app.route('/api/data')
 # def data():
 #     query = User.query
@@ -280,17 +315,7 @@ def get_df_graph(df):
 #         'draw': request.args.get('draw', type=int),
 #     }
 
-@app.route('/')
-def test_flask():
-    stocks = df.to_numpy()
-    # img_src = get_df_graph(df)
-    img_src = None
-    return render_template('results.html', title='Stock Price Forcasting App', stocks = stocks, img_src= img_src)
-    # return render_template('results.html', title='IEX Trading')
-
-
-
 if __name__ == '__main__':
-    print(get_df_graph(df))
-    app.run(host='0.0.0.0', port=80)
+    # print(get_df_graph(df))
+    app.run(host='0.0.0.0', port=80, debug = True)
     # image_url = get_results()
