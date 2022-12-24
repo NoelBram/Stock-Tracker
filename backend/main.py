@@ -23,6 +23,10 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
 from datetime import timedelta
+from threading import Lock
+from flask import Flask, render_template
+from flask_socketio import SocketIO
+import time
 from tqdm import tqdm
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -39,55 +43,71 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = 'pk_913ba7d52f144907a92856b52ea06
 db = SQLAlchemy(app)
 
 STOCK_NAME = 'AAPL'
+STOCKS = ['AAPL', 'NKE']
 IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
-df = get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08')
 
-minmax = MinMaxScaler().fit(df.iloc[:, 4:5].astype('float32')) # Close index
-df_log = minmax.transform(df.iloc[:, 4:5].astype('float32')) # Close index
-df_log = pd.DataFrame(df_log)
-print(df_log.head())
+# Get a list of stock data of the most recent 'weekday' before today.
+STOCK_LIST_DF = []
+for stock in STOCKS:
+    days = 1
+    today = datetime.datetime.now() - datetime.timedelta(days=days)
+    today = today.strftime("%Y-%m-%d")
+    while True:
+        try :
+            STOCK_LIST_DF.append(get_stock_df(stock, today, today))
+            # To check STOCK_LIST_DF has valid input(s).
+            # print('{today} equals; \n{value}\n'.format(today=today, value=get_stock_df(stock, today, today)))
+        except TypeError:
+            days += 1
+            today = datetime.datetime.now() - datetime.timedelta(days=days)
+            today = today.strftime("%Y-%m-%d")  
+            continue
+        break
+
+print('Here is a list of stock data of the most recent \'weekday\' before today.')
+for stock in STOCK_LIST_DF:
+    print(stock.to_numpy())
+
+time.sleep(60)
+
+STOCK_DF = pd.DataFrame()
 
 test_size = 30
 simulation_size = 10
 
-df_train = df_log.iloc[:-test_size]
-df_test = df_log.iloc[-test_size:]
-nfeatures = 7
-print('df.shape = {df}, df_train.shape = {df_train}, df_test.shape = {df_test}'.format(df = df.shape, df_train = df_train.shape, df_test = df_test.shape))
+class Model:
+    def __init__(
+        self,
+        learning_rate,
+        num_layers,
+        size,
+        size_layer,
+        output_size,
+        forget_bias = 0.1,
+    ):
+        tf.compat.v1.disable_eager_execution()
+        def lstm_cell(size_layer):
+            return layers.LSTMCell(size_layer)
 
-# class Model:
-#     def __init__(
-#         self,
-#         learning_rate,
-#         num_layers,
-#         size,
-#         size_layer,
-#         output_size,
-#         forget_bias = 0.1,
-#     ):
-#         tf.compat.v1.disable_eager_execution()
-#         def lstm_cell(size_layer):
-#             return layers.LSTMCell(size_layer)
+        rnn_cells = [lstm_cell(size_layer) for _ in range(num_layers)]
+        stacked_lstm = layers.StackedRNNCells(rnn_cells)
 
-#         rnn_cells = [lstm_cell(size_layer) for _ in range(num_layers)]
-#         stacked_lstm = layers.StackedRNNCells(rnn_cells)
-
-#         self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
-#         self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
-#         drop = tf.nn.RNNCellDropoutWrapper(
-#             stacked_lstm, output_keep_prob = forget_bias
-#         )
-#         self.hidden_layer = tf.compat.v1.placeholder(
-#             tf.float32, (None, num_layers * 2 * size_layer)
-#         )
-#         self.outputs, self.last_state = tf.nn.dynamic_rnn(
-#             drop, self.X, initial_state = self.hidden_layer, dtype = tf.float32
-#         )
-#         self.logits = layers.Dense(self.outputs[-1], output_size)
-#         self.cost = tf.compat.v1.reduce_mean(tf.square(self.Y - self.logits))
-#         self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate).minimize(
-#             self.cost
-#         )
+        self.X = tf.compat.v1.placeholder(tf.float32, (None, None, size))
+        self.Y = tf.compat.v1.placeholder(tf.float32, (None, output_size))
+        drop = tf.nn.RNNCellDropoutWrapper(
+            stacked_lstm, output_keep_prob = forget_bias
+        )
+        self.hidden_layer = tf.compat.v1.placeholder(
+            tf.float32, (None, num_layers * 2 * size_layer)
+        )
+        self.outputs, self.last_state = tf.nn.dynamic_rnn(
+            drop, self.X, initial_state = self.hidden_layer, dtype = tf.float32
+        )
+        self.logits = layers.Dense(self.outputs[-1], output_size)
+        self.cost = tf.compat.v1.reduce_mean(tf.square(self.Y - self.logits))
+        self.optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate).minimize(
+            self.cost
+        )
         
 def calculate_accuracy(real, predict):
     real = np.array(real) + 1
@@ -104,15 +124,15 @@ def anchor(signal, weight):
         last = smoothed_val
     return buffer
 
-num_layers = 1
-size_layer = 128
-timestamp = 5
-epoch = 300
-dropout_rate = 0.8
-future_day = test_size
-learning_rate = 0.01
-
 def forecast():
+    num_layers = 1
+    size_layer = 128
+    timestamp = 5
+    epoch = 300
+    dropout_rate = 0.8
+    future_day = test_size
+    learning_rate = 0.01
+    
     tf.compat.v1.reset_default_graph()
     modelnn = Model(
         learning_rate, num_layers, df_log.shape[1], size_layer, df_log.shape[1], dropout_rate
@@ -196,63 +216,78 @@ def forecast():
     
     return deep_future
 
-# def get_results():
-#     results = []
-#     for i in range(simulation_size):
-#         print('simulation %d'%(i + 1))
-#         results.append(forecast())
+@app.route('/results.png')
+def get_results():
+    results = []
+    for i in range(simulation_size):
+        print('simulation %d'%(i + 1))
+        results.append(forecast())
     
-#     date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
-#     for i in range(test_size):
-#         date_ori.append(date_ori[-1] + timedelta(days = 1))
-#     date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
-#     print(date_ori[-5:])
+    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+    for i in range(test_size):
+        date_ori.append(date_ori[-1] + timedelta(days = 1))
+    date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
+    print(date_ori[-5:])
 
-#     accepted_results = []
-#     for r in results:
-#         if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
-#         (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
-#             accepted_results.append(r)
-#     # len(accepted_results)
+    accepted_results = []
+    for r in results:
+        if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
+        (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
+            accepted_results.append(r)
+    # len(accepted_results)
 
-#     accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
+    accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
 
-#     plt.figure(figsize = (15, 5))
-#     for no, r in enumerate(accepted_results):
-#         plt.plot(r, label = 'forecast %d'%(no + 1))
-#     plt.plot(df['Close'], label = 'true trend', c = 'black')
-#     plt.legend()
-#     plt.title('average accuracy: %.4f'%(np.mean(accuracies)))
+    fig, ax = plt.figure(figsize = (15, 5))
+    fig.patch.set_facecolor('#E8E5DA')
+    for no, r in enumerate(accepted_results):
+        plt.plot(r, label = 'forecast %d'%(no + 1))
+    plt.plot(df['Close'], label = 'true trend', c = 'black')
+    plt.legend()
+    plt.title('Average accuracy: %.4f'%(np.mean(accuracies)))
 
-#     x_range_future = np.arange(len(results[0]))
-#     plt.xticks(x_range_future[::30], date_ori[::30])
+    x_range_future = np.arange(len(results[0]))
+    plt.xticks(x_range_future[::30], date_ori[::30])
+
+    output = io.BytesIO()
+    FigureCanvas(fig).print_png(output)
     
-#     url = '/static/charts/{stock_name}.png'.format(stock_name = STOCK_NAME)
+    return Response(output.getvalue(), mimetype='image/png')
 
-#     plt.savefig(url, format='png')
-#     # full_filename = os.path.join(app.config['CHART_FOLDER'], url)
-#     return url
+sio = SocketIO(app)
 
-# def get_df_graph(df):
-#     # transpose and plot
-#     plt = df.plot(x = 'Date', y = 'High', figsize=(7, 6))
-#     plt.set_ylabel('Stock Price (USD)', fontsize=12)
-#     plt.set_xlabel('Date (YYYY-MM-DD)', fontsize=12)
-#     plt.figure.savefig(IMAGE_URL, format='png')
-#     return IMAGE_URL[7:]
+thread = None
+thread_lock = Lock()
+
+def background_task():
+    while True:
+        super.STOCK_DF = get_stock_df(STOCK_NAME, '2021-12-23', '2022-12-23')
+        minmax = MinMaxScaler().fit(STOCK_DF.iloc[:, 4:5].astype('float32')) # Close index
+        df_log = minmax.transform(STOCK_DF.iloc[:, 4:5].astype('float32')) # Close index
+        df_log = pd.DataFrame(df_log)
+        print('Here is the df_log.head() element')
+        print(df_log.head())
+        df_train = df_log.iloc[:-test_size]
+        df_test = df_log.iloc[-test_size:]
+        print('df.shape = {df}, df_train.shape = {df_train}, df_test.shape = {df_test}'.format(df = STOCK_DF.shape, df_train = df_train.shape, df_test = df_test.shape))
+
+        time.sleep(60)
+        break
 
 
 @app.route('/')
 @app.route('/results', methods=("POST", "GET"))
-def results():
-    stocks = df.to_numpy()
-    return render_template('results.html', title='Stock Forcasting', stocks = stocks)
-    # return render_template('results.html', title='IEX Trading')
+def index():
+    global thread
+    with thread_lock:
+        if thread is None:
+            thread = sio.start_background_task(background_task)
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_DF)
 
 
 @app.route('/plot.png')
 def plot_png():
-    fig = create_figure(df)
+    fig = create_figure(STOCK_DF)
     output = io.BytesIO()
     FigureCanvas(fig).print_png(output)
     return Response(output.getvalue(), mimetype='image/png')
@@ -266,8 +301,8 @@ def create_figure(df):
 
     ax.bar(x, y, color = "#304C89")
 
-    plt.ylabel('Stock Price (USD)', fontsize=12)
-    plt.xlabel('Date (YYYY-MM-DD)', fontsize=12)
+    plt.ylabel('Stock Price (USD)', fontsize=8)
+    plt.xlabel('Date (YYYY-MM-DD)', fontsize=8)
 
     return fig
 # @app.route('/api/data')
@@ -316,6 +351,4 @@ def create_figure(df):
 #     }
 
 if __name__ == '__main__':
-    # print(get_df_graph(df))
     app.run(host='0.0.0.0', port=80, debug = True)
-    # image_url = get_results()

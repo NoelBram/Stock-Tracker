@@ -56,6 +56,7 @@ def get_stock_quote_data(symbol, dateA, dateB):
     low = []        
     open = []       
     symbols = []
+    timestamp = []
     volume = []     
 
     # Extracting only the relevant bits of data from the json object 
@@ -69,7 +70,8 @@ def get_stock_quote_data(symbol, dateA, dateB):
     #     symbols = [ticker.get('ticker')] * ticker.get('count')
     # except TypeError:
     #     symbols = [ticker.get('ticker')] * 1
-    timestamp = pd.date_range(dateA, dateB).strftime('%Y-%m-%d').tolist()
+    # get only business days 
+    # timestamp = pd.date_range(dateA, dateB, freq='B').strftime('%Y-%m-%d').tolist()
             
     for quote in ticker.get('results')[:]:
         close.append(quote['c'])
@@ -77,6 +79,8 @@ def get_stock_quote_data(symbol, dateA, dateB):
         low.append(quote['l'])
         open.append(quote['o'])
         volume.append(quote['v'])
+        timestamp.append(quote['v'])
+
                         
     stock_quote_dict = {
         'Close' : close,
@@ -111,7 +115,13 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
 def get_stock_df(sybol, dateA, dateB):
     stock_quotes = get_stock_quote_data(sybol, dateA, dateB)
-    stock_quotes_df = pd.DataFrame(stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+
+    # To test the output length of each collumn.
+    # print(len(stock_quotes['Symbol']), len(stock_quotes['Date']), len(stock_quotes['Open']), len(stock_quotes['High']), len(stock_quotes['Low']), len(stock_quotes['Close']), len(stock_quotes['Volume']))
+    
+    stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+    # stock_quotes_df = stock_quotes_df.transpose()
+    print('Going to Validate...')
     # Validate
     if check_if_valid_data(stock_quotes_df):
         print('Data valid, proceed to Load stage')
@@ -135,7 +145,7 @@ def get_stock_df(sybol, dateA, dateB):
 # #     STOCKS = ['AAPL', 'NKE']
 #     # print(get_stock_quote(STOCK_NAME, '2022-04-04', '2022-04-08'))
 #     # print(get_stock_quote_data(STOCK_NAME, '2022-04-04', '2022-04-08'))
-#     print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
-
+#     # print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
+#     print(get_stock_df(STOCK_NAME, '2022-11-10', '2022-11-11'))
 
 
