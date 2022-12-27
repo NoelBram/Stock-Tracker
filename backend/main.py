@@ -21,8 +21,7 @@ import matplotlib.pyplot as plt
 
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
-from datetime import datetime
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from threading import Lock
 from flask import Flask, render_template
 from flask_socketio import SocketIO
@@ -47,28 +46,46 @@ STOCKS = ['AAPL', 'NKE']
 IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 
 # Get a list of stock data of the most recent 'weekday' before today.
-STOCK_LIST_DF = []
+def prev_weekday(adate):
+    adate -= datetime.timedelta(days=2)
+    while adate.weekday() > 4: # Mon-Fri are 0-4
+        adate -= datetime.timedelta(days=1)
+    return adate
+STOCK_LIST_DF = pd.DataFrame()
 for stock in STOCKS:
-    days = 1
-    today = datetime.datetime.now() - datetime.timedelta(days=days)
+    today = prev_weekday(datetime.datetime.now())
     today = today.strftime("%Y-%m-%d")
-    while True:
-        try :
-            STOCK_LIST_DF.append(get_stock_df(stock, today, today))
-            # To check STOCK_LIST_DF has valid input(s).
-            # print('{today} equals; \n{value}\n'.format(today=today, value=get_stock_df(stock, today, today)))
-        except TypeError:
-            days += 1
-            today = datetime.datetime.now() - datetime.timedelta(days=days)
-            today = today.strftime("%Y-%m-%d")  
-            continue
-        break
+    print('Here is Today: \n')
+    print(today)
+    df = get_stock_df(stock, today, today)
+    if STOCK_LIST_DF.empty:
+        STOCK_LIST_DF = df
+        continue
+    STOCK_LIST_DF.merge(df)
+    # while True:
+    #     try :
+    #         print('Here is Today: \n')
+    #         print(today)
+    #         data = get_stock_df(stock, today, today)
+    #         if data == None:
+    #             continue
+    #         STOCK_LIST_DF.append()
+    #         days += 1
+    #         today = datetime.datetime.now() - datetime.timedelta(days=days)
+    #         today = today.strftime("%Y-%m-%d")  
+    #         # To check STOCK_LIST_DF has valid input(s).
+    #         # print('{today} equals; \n{value}\n'.format(today=today, value=get_stock_df(stock, today, today)))
+    #     except TypeError:
+    #         days += 1
+    #         today = datetime.datetime.now() - datetime.timedelta(days=days)
+    #         today = today.strftime("%Y-%m-%d")  
+    #         continue
+        # break
 
 print('Here is a list of stock data of the most recent \'weekday\' before today.')
-for stock in STOCK_LIST_DF:
-    print(stock.to_numpy())
+print(STOCK_LIST_DF.to_numpy())
 
-time.sleep(60)
+# time.sleep(60)
 
 STOCK_DF = pd.DataFrame()
 
@@ -124,165 +141,155 @@ def anchor(signal, weight):
         last = smoothed_val
     return buffer
 
-def forecast():
-    num_layers = 1
-    size_layer = 128
-    timestamp = 5
-    epoch = 300
-    dropout_rate = 0.8
-    future_day = test_size
-    learning_rate = 0.01
+# def forecast():
+#     num_layers = 1
+#     size_layer = 128
+#     timestamp = 5
+#     epoch = 300
+#     dropout_rate = 0.8
+#     future_day = test_size
+#     learning_rate = 0.01
     
-    tf.compat.v1.reset_default_graph()
-    modelnn = Model(
-        learning_rate, num_layers, df_log.shape[1], size_layer, df_log.shape[1], dropout_rate
-    )
-    sess = tf.compat.v1.InteractiveSession()
-    sess.run(tf.compat.v1.global_variables_initializer())
-    date_ori = pd.to_datetime(df.iloc[:, 0]).tolist()
+#     tf.compat.v1.reset_default_graph()
+#     modelnn = Model(
+#         learning_rate, num_layers, df_log.shape[1], size_layer, df_log.shape[1], dropout_rate
+#     )
+#     sess = tf.compat.v1.InteractiveSession()
+#     sess.run(tf.compat.v1.global_variables_initializer())
+#     date_ori = pd.to_datetime(df.iloc[:, 0]).tolist()
 
-    pbar = tqdm(range(epoch), desc = 'train loop')
-    for i in pbar:
-        init_value = np.zeros((1, num_layers * 2 * size_layer))
-        total_loss, total_acc = [], []
-        for k in range(0, df_train.shape[0] - 1, timestamp):
-            index = min(k + timestamp, df_train.shape[0] - 1)
-            batch_x = np.expand_dims(
-                df_train.iloc[k : index, :].values, axis = 0
-            )
-            batch_y = df_train.iloc[k + 1 : index + 1, :].values
-            logits, last_state, _, loss = sess.run(
-                [modelnn.logits, modelnn.last_state, modelnn.optimizer, modelnn.cost],
-                feed_dict = {
-                    modelnn.X: batch_x,
-                    modelnn.Y: batch_y,
-                    modelnn.hidden_layer: init_value,
-                },
-            )        
-            init_value = last_state
-            total_loss.append(loss)
-            total_acc.append(calculate_accuracy(batch_y[:, 0], logits[:, 0]))
-        pbar.set_postfix(cost = np.mean(total_loss), acc = np.mean(total_acc))
+#     pbar = tqdm(range(epoch), desc = 'train loop')
+#     for i in pbar:
+#         init_value = np.zeros((1, num_layers * 2 * size_layer))
+#         total_loss, total_acc = [], []
+#         for k in range(0, df_train.shape[0] - 1, timestamp):
+#             index = min(k + timestamp, df_train.shape[0] - 1)
+#             batch_x = np.expand_dims(
+#                 df_train.iloc[k : index, :].values, axis = 0
+#             )
+#             batch_y = df_train.iloc[k + 1 : index + 1, :].values
+#             logits, last_state, _, loss = sess.run(
+#                 [modelnn.logits, modelnn.last_state, modelnn.optimizer, modelnn.cost],
+#                 feed_dict = {
+#                     modelnn.X: batch_x,
+#                     modelnn.Y: batch_y,
+#                     modelnn.hidden_layer: init_value,
+#                 },
+#             )        
+#             init_value = last_state
+#             total_loss.append(loss)
+#             total_acc.append(calculate_accuracy(batch_y[:, 0], logits[:, 0]))
+#         pbar.set_postfix(cost = np.mean(total_loss), acc = np.mean(total_acc))
     
-    future_day = test_size
+#     future_day = test_size
 
-    output_predict = np.zeros((df_train.shape[0] + future_day, df_train.shape[1]))
-    output_predict[0] = df_train.iloc[0]
-    upper_b = (df_train.shape[0] // timestamp) * timestamp
-    init_value = np.zeros((1, num_layers * 2 * size_layer))
+#     output_predict = np.zeros((df_train.shape[0] + future_day, df_train.shape[1]))
+#     output_predict[0] = df_train.iloc[0]
+#     upper_b = (df_train.shape[0] // timestamp) * timestamp
+#     init_value = np.zeros((1, num_layers * 2 * size_layer))
 
-    for k in range(0, (df_train.shape[0] // timestamp) * timestamp, timestamp):
-        out_logits, last_state = sess.run(
-            [modelnn.logits, modelnn.last_state],
-            feed_dict = {
-                modelnn.X: np.expand_dims(
-                    df_train.iloc[k : k + timestamp], axis = 0
-                ),
-                modelnn.hidden_layer: init_value,
-            },
-        )
-        init_value = last_state
-        output_predict[k + 1 : k + timestamp + 1] = out_logits
+#     for k in range(0, (df_train.shape[0] // timestamp) * timestamp, timestamp):
+#         out_logits, last_state = sess.run(
+#             [modelnn.logits, modelnn.last_state],
+#             feed_dict = {
+#                 modelnn.X: np.expand_dims(
+#                     df_train.iloc[k : k + timestamp], axis = 0
+#                 ),
+#                 modelnn.hidden_layer: init_value,
+#             },
+#         )
+#         init_value = last_state
+#         output_predict[k + 1 : k + timestamp + 1] = out_logits
 
-    if upper_b != df_train.shape[0]:
-        out_logits, last_state = sess.run(
-            [modelnn.logits, modelnn.last_state],
-            feed_dict = {
-                modelnn.X: np.expand_dims(df_train.iloc[upper_b:], axis = 0),
-                modelnn.hidden_layer: init_value,
-            },
-        )
-        output_predict[upper_b + 1 : df_train.shape[0] + 1] = out_logits
-        future_day -= 1
-        date_ori.append(date_ori[-1] + timedelta(days = 1))
+#     if upper_b != df_train.shape[0]:
+#         out_logits, last_state = sess.run(
+#             [modelnn.logits, modelnn.last_state],
+#             feed_dict = {
+#                 modelnn.X: np.expand_dims(df_train.iloc[upper_b:], axis = 0),
+#                 modelnn.hidden_layer: init_value,
+#             },
+#         )
+#         output_predict[upper_b + 1 : df_train.shape[0] + 1] = out_logits
+#         future_day -= 1
+#         date_ori.append(date_ori[-1] + timedelta(days = 1))
 
-    init_value = last_state
+#     init_value = last_state
     
-    for i in range(future_day):
-        o = output_predict[-future_day - timestamp + i:-future_day + i]
-        out_logits, last_state = sess.run(
-            [modelnn.logits, modelnn.last_state],
-            feed_dict = {
-                modelnn.X: np.expand_dims(o, axis = 0),
-                modelnn.hidden_layer: init_value,
-            },
-        )
-        init_value = last_state
-        output_predict[-future_day + i] = out_logits[-1]
-        date_ori.append(date_ori[-1] + timedelta(days = 1))
+#     for i in range(future_day):
+#         o = output_predict[-future_day - timestamp + i:-future_day + i]
+#         out_logits, last_state = sess.run(
+#             [modelnn.logits, modelnn.last_state],
+#             feed_dict = {
+#                 modelnn.X: np.expand_dims(o, axis = 0),
+#                 modelnn.hidden_layer: init_value,
+#             },
+#         )
+#         init_value = last_state
+#         output_predict[-future_day + i] = out_logits[-1]
+#         date_ori.append(date_ori[-1] + timedelta(days = 1))
     
-    output_predict = minmax.inverse_transform(output_predict)
-    deep_future = anchor(output_predict[:, 0], 0.4)
+#     output_predict = minmax.inverse_transform(output_predict)
+#     deep_future = anchor(output_predict[:, 0], 0.4)
     
-    return deep_future
+#     return deep_future
 
-@app.route('/results.png')
-def get_results():
-    results = []
-    for i in range(simulation_size):
-        print('simulation %d'%(i + 1))
-        results.append(forecast())
+# @app.route('/results.png')
+# def get_results():
+#     results = []
+#     for i in range(simulation_size):
+#         print('simulation %d'%(i + 1))
+#         results.append(forecast())
     
-    date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
-    for i in range(test_size):
-        date_ori.append(date_ori[-1] + timedelta(days = 1))
-    date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
-    print(date_ori[-5:])
+#     date_ori = pd.to_datetime(df.iloc[:, 1]).tolist()
+#     for i in range(test_size):
+#         date_ori.append(date_ori[-1] + timedelta(days = 1))
+#     date_ori = pd.Series(date_ori).dt.strftime(date_format = '%Y-%m-%d').tolist()
+#     print(date_ori[-5:])
 
-    accepted_results = []
-    for r in results:
-        if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
-        (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
-            accepted_results.append(r)
-    # len(accepted_results)
+#     accepted_results = []
+#     for r in results:
+#         if (np.array(r[-test_size:]) < np.min(df['Close'])).sum() == 0 and \
+#         (np.array(r[-test_size:]) > np.max(df['Close']) * 2).sum() == 0:
+#             accepted_results.append(r)
+#     # len(accepted_results)
 
-    accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
+#     accuracies = [calculate_accuracy(df['Close'].values, r[:-test_size]) for r in accepted_results]
 
-    fig, ax = plt.figure(figsize = (15, 5))
-    fig.patch.set_facecolor('#E8E5DA')
-    for no, r in enumerate(accepted_results):
-        plt.plot(r, label = 'forecast %d'%(no + 1))
-    plt.plot(df['Close'], label = 'true trend', c = 'black')
-    plt.legend()
-    plt.title('Average accuracy: %.4f'%(np.mean(accuracies)))
+#     fig, ax = plt.figure(figsize = (15, 5))
+#     fig.patch.set_facecolor('#E8E5DA')
+#     for no, r in enumerate(accepted_results):
+#         plt.plot(r, label = 'forecast %d'%(no + 1))
+#     plt.plot(df['Close'], label = 'true trend', c = 'black')
+#     plt.legend()
+#     plt.title('Average accuracy: %.4f'%(np.mean(accuracies)))
 
-    x_range_future = np.arange(len(results[0]))
-    plt.xticks(x_range_future[::30], date_ori[::30])
+#     x_range_future = np.arange(len(results[0]))
+#     plt.xticks(x_range_future[::30], date_ori[::30])
 
-    output = io.BytesIO()
-    FigureCanvas(fig).print_png(output)
+#     output = io.BytesIO()
+#     FigureCanvas(fig).print_png(output)
     
-    return Response(output.getvalue(), mimetype='image/png')
+#     return Response(output.getvalue(), mimetype='image/png')
 
 sio = SocketIO(app)
 
 thread = None
 thread_lock = Lock()
 
-def background_task():
-    while True:
-        super.STOCK_DF = get_stock_df(STOCK_NAME, '2021-12-23', '2022-12-23')
-        minmax = MinMaxScaler().fit(STOCK_DF.iloc[:, 4:5].astype('float32')) # Close index
-        df_log = minmax.transform(STOCK_DF.iloc[:, 4:5].astype('float32')) # Close index
-        df_log = pd.DataFrame(df_log)
-        print('Here is the df_log.head() element')
-        print(df_log.head())
-        df_train = df_log.iloc[:-test_size]
-        df_test = df_log.iloc[-test_size:]
-        print('df.shape = {df}, df_train.shape = {df_train}, df_test.shape = {df_test}'.format(df = STOCK_DF.shape, df_train = df_train.shape, df_test = df_test.shape))
-
-        time.sleep(60)
-        break
+# def background_task():
+#     while True:
+#         time.sleep(60)
+#         break
 
 
 @app.route('/')
 @app.route('/results', methods=("POST", "GET"))
 def index():
     global thread
-    with thread_lock:
-        if thread is None:
-            thread = sio.start_background_task(background_task)
-    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_DF)
+    # with thread_lock:
+    #     if thread is None:
+    #         thread = sio.start_background_task(background_task)
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF)
 
 
 @app.route('/plot.png')

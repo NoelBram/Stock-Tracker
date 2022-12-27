@@ -142,10 +142,10 @@ def get_stock_df(sybol, dateA, dateB):
 
 # if __name__ == '__main__':
 #     STOCK_NAME = 'AAPL'
-# #     STOCKS = ['AAPL', 'NKE']
+#     STOCKS = ['AAPL', 'NKE']
 #     # print(get_stock_quote(STOCK_NAME, '2022-04-04', '2022-04-08'))
 #     # print(get_stock_quote_data(STOCK_NAME, '2022-04-04', '2022-04-08'))
 #     # print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
-#     print(get_stock_df(STOCK_NAME, '2022-11-10', '2022-11-11'))
+#     print(get_stock_df(STOCK_NAME, '2022-12-23', '2022-12-23'))
 
 
