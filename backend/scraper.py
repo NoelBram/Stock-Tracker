@@ -22,10 +22,8 @@ from typing import cast
 from urllib3 import HTTPResponse
 from collections import ChainMap
 
-
 POLYGON_API_KEY = '3MF64zqXMDhh62DUOAC0Lduj7MpIXlmC'
-database_LOCATION = 'sqlite:///db.sqlite'
-conn = sqlite3.connect('db.sqlite')
+database_LOCATION = 'SQLite_Python.db'
 
 # Sidebar
 st.sidebar.subheader('Query parameters')
@@ -112,51 +110,81 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_stock_df(title, sybol, dateA, dateB):
-    stock_quotes = get_stock_quote_data(sybol, dateA, dateB)
+def get_stock_df(title, symbol, dateA, dateB):
+    stock_quotes = get_stock_quote_data(symbol, dateA, dateB)
 
     # To test the output length of each collumn.
     # print(len(stock_quotes['Symbol']), len(stock_quotes['Date']), len(stock_quotes['Open']), len(stock_quotes['High']), len(stock_quotes['Low']), len(stock_quotes['Close']), len(stock_quotes['Volume']))
     
     stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
     # stock_quotes_df = stock_quotes_df.transpose()
+    
+    try :
+        sqliteConnection = sqlite3.connect(database_LOCATION)
+        cursor = sqliteConnection.cursor()
+        print('Connected to SQLite')
 
-    # print('Going to Validate...')
     # Validate
-    if check_if_valid_data(stock_quotes_df):
-        print('Data valid, proceed to Load stage\n')
-    else:
-        print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
-        return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
+        if check_if_valid_data(stock_quotes_df):
+            print('Data valid, proceed to Load stage\n <------- - ------- - ------->')
+        else:
+            print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
+            sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
+            cursor.execute(sqlite_update_query)
+            return '(Database {title}):\n{db}'.format(title = title, db = cursor.fetchall())
 
     # Load
-    for date in stock_quotes_df['Date']:
-        try:
-            data = pd.read_sql_query('SELECT * FROM {title} where Date = {date}'.format(sybol=sybol, title=title, date=int(date)), conn)
-            if not data.empty:
-                print('Data already exists in the database.')
-                print('(Failed data I/P):\n{data}\n'.format(data = data))
-                return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
-        except pd.io.sql.DatabaseError:
-            print('\n<--- New database called {title} created. --->\n'.format(title = title))
+        for date in stock_quotes_df['Date']:
+            try:
+                sqlite_update_query = '''SELECT * FROM {title} WHERE Date = {date} AND Symbol = \'{symbol}\''''.format(symbol=symbol, title=title, date=int(date))
+                cursor.execute(sqlite_update_query)
+                records = cursor.fetchall()
+                if len(records) != 0:
+                    print('Data already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = records))
+                    sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
+                    cursor.execute(sqlite_update_query)
+                    return '(Database {title}):\n{db}\n'.format(title = title, db = cursor.fetchall())
+            except sqlite3.Error:
+                print('\n<--- New database called {title} created. --->\n'.format(title = title))
+                stock_quotes_df.to_sql(title, sqliteConnection, index=False)
+                print('Opened database with a value for {symbol} successfully'.format(symbol = symbol))
+        # Checking for duplicate
+        sqlite_update_query = '''SELECT * FROM {title} WHERE Symbol = \'{symbol}\''''.format(symbol=symbol, title=title)
+        cursor.execute(sqlite_update_query)
+        records = cursor.fetchall()
+        if len(records) != 0:
+            sqlite_update_query = '''UPDATE {title} SET Date = ? AND Open = ? AND High = ? AND Low = ? AND Close = ? AND Volume = ? WHERE Symbol = \'{symbol}\''''.format(title=title, symbol = symbol)
+            columnValues = (int(stock_quotes_df['Date']), float(stock_quotes_df['Open']), float(stock_quotes_df['High']), float(stock_quotes_df['Low']), float(stock_quotes_df['Close']), float(stock_quotes_df['Volume']))
+            cursor.execute(sqlite_update_query, columnValues)
+            print('Replaced database with a value for {symbol} successfully'.format(symbol = symbol))
+        else:
+            stock_quotes_df.to_sql(title, sqliteConnection, index=False, if_exists='append')
+            print('Appended database with a value for {symbol} successfully'.format(symbol = symbol))
 
-    try:
-        stock_quotes_df.to_sql(title, conn, index=False, if_exists='append')
-        print('Opened database successfully')
-    except:
-        print('ERROR: cound not open database')
 
-    conn.commit()
-    print('Committed to database successfully')
+        sqliteConnection.commit()
+        print('Committed to database with a value for {symbol} successfully'.format(symbol = symbol))
+        sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
+        cursor.execute(sqlite_update_query)
+        return '(Database {title}):\n{db}\n'.format(title = title, db = cursor.fetchall())
+    
+    except sqlite3.Error as error:
+        print('Failed to update {title} database\n'.format(title = title), error)
+    finally:
+        if sqliteConnection:
+            sqliteConnection.close()
+            print("Sqlite connection is closed")
 
-    return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
+# if __name__ == '__main__':
+#     STOCKS = ['AAPL', 'NKE']
+#     DATE = ['2022-04-04', '2022-04-08']
+#     TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
+#     # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
+#     # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
+#     # print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
+#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
+#     print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
 
-if __name__ == '__main__':
-    STOCKS = ['AAPL', 'NKE']
-    DATE = ['2022-04-04', '2022-04-08']
-    TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
-    # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
-    # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
-    print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
+
 
 
