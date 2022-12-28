@@ -24,14 +24,13 @@ from collections import ChainMap
 
 
 POLYGON_API_KEY = '3MF64zqXMDhh62DUOAC0Lduj7MpIXlmC'
-dateBASE_LOCATION = 'sqlite:///db.sqlite'
+database_LOCATION = 'sqlite:///db.sqlite'
 conn = sqlite3.connect('db.sqlite')
 
 # Sidebar
 st.sidebar.subheader('Query parameters')
 start_date = st.sidebar.date_input('Start date', datetime.date(2019, 1, 1))
 end_date = st.sidebar.date_input('End date', datetime.date(2021, 1, 31))
-
 
 # Extract: get stock data
 def get_stock_quote(symbol, dateA, dateB):
@@ -121,24 +120,28 @@ def get_stock_df(sybol, dateA, dateB):
     
     stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
     # stock_quotes_df = stock_quotes_df.transpose()
-    print('Going to Validate...')
+
+    # print('Going to Validate...')
     # Validate
     if check_if_valid_data(stock_quotes_df):
         print('Data valid, proceed to Load stage')
+    else:
+        print('Data Not valid, can\'t proceed to Load stage')
+        return pd.DataFrame()
 
     # Load
-    print('Opened dateBase successfully')
-
     try:
-        stock_quotes_df.to_sql('my_stock_quotes', conn, index=False, if_exists='replace')
+        stock_quotes_df.to_sql('my_stock_quotes', conn, index=False, if_exists='fail')
+        print('Opened database successfully')
     except:
-        print('Data already exists in the dateBase')
-
-    df = pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
+        print('Data already exists in the database')
+        return pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
 
     conn.commit()
-    print('Close dateBase successfully')
-    return df
+    print('Committed to database successfully')
+
+    return pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
+
 
 # if __name__ == '__main__':
 #     STOCK_NAME = 'AAPL'
