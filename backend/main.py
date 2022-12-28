@@ -25,9 +25,6 @@ from datetime import date, datetime, timedelta
 from threading import Lock
 from flask import Flask, render_template
 from flask_socketio import SocketIO
-import time
-from tqdm import tqdm
-
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 from flask_sqlalchemy import SQLAlchemy
@@ -47,24 +44,24 @@ IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_na
 
 # Get a list of stock data of the most recent 'weekday' before today.
 def prev_weekday(adate):
-    adate -= datetime.timedelta(days=3)
+    adate -= datetime.timedelta(days=1)
     while adate.weekday() > 4: # Mon-Fri are 0-4
         adate -= datetime.timedelta(days=1)
     return adate
+TODAY = prev_weekday(datetime.datetime.now())
+TODAY = TODAY.strftime("%Y-%m-%d")
 
 STOCK_LIST_DF = pd.DataFrame()
 for stock in STOCKS:
-    today = prev_weekday(datetime.datetime.now())
-    today = today.strftime("%Y-%m-%d")
     print('Here is Today: \n')
-    print(today)
-    STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, today, today)
+    print(TODAY)
+    STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
 
 print('Here is a list of stock data of the most recent \'weekday\' before today.')
 print(STOCK_LIST_DF.to_numpy())
 
 # Dataframe to graph out the forcast in dropdown.
-STOCK_DF = pd.DataFrame()
+STOCK_DF = get_stock_df('my_stock_quotes', stock, '2021-12-23', TODAY)
 
 test_size = 30
 simulation_size = 10
@@ -253,19 +250,10 @@ sio = SocketIO(app)
 thread = None
 thread_lock = Lock()
 
-# def background_task():
-#     while True:
-#         time.sleep(60)
-#         break
-
-
 @app.route('/')
 @app.route('/results', methods=("POST", "GET"))
 def index():
     global thread
-    # with thread_lock:
-    #     if thread is None:
-    #         thread = sio.start_background_task(background_task)
     return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF)
 
 

@@ -225,15 +225,15 @@ def get_stock_df(title, symbol, dateA, dateB):
     print('(Database {title}):'.format(title = title))
     return recordT          
    
-if __name__ == '__main__':
-    STOCKS = ['AAPL', 'NKE']
-    DATE = ['2022-04-04', '2022-04-08']
-    TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
-    # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
-    # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
-    print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
-    # print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
-    # print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
+# if __name__ == '__main__':
+#     STOCKS = ['AAPL', 'NKE']
+#     DATE = ['2022-04-04', '2022-04-08']
+#     TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
+#     # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
+#     # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
+#     print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
+#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
+#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
 
 
 
