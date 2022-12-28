@@ -110,70 +110,104 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_stock_df(title, symbol, dateA, dateB):
-    stock_quotes = get_stock_quote_data(symbol, dateA, dateB)
-
-    # To test the output length of each collumn.
-    # print(len(stock_quotes['Symbol']), len(stock_quotes['Date']), len(stock_quotes['Open']), len(stock_quotes['High']), len(stock_quotes['Low']), len(stock_quotes['Close']), len(stock_quotes['Volume']))
-    
-    stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
-    # stock_quotes_df = stock_quotes_df.transpose()
-    
-    try :
+def deleteRecord(df, title, symbol):
+    try:
         sqliteConnection = sqlite3.connect(database_LOCATION)
         cursor = sqliteConnection.cursor()
-        print('Connected to SQLite')
+        print('D: Connected to SQLite')
 
-    # Validate
-        if check_if_valid_data(stock_quotes_df):
-            print('Data valid, proceed to Load stage\n <------- - ------- - ------->')
-        else:
-            print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
-            sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
-            cursor.execute(sqlite_update_query)
-            return '(Database {title}):\n{db}'.format(title = title, db = cursor.fetchall())
-
-    # Load
-        for date in stock_quotes_df['Date']:
-            try:
-                sqlite_update_query = '''SELECT * FROM {title} WHERE Date = {date} AND Symbol = \'{symbol}\''''.format(symbol=symbol, title=title, date=int(date))
-                cursor.execute(sqlite_update_query)
-                records = cursor.fetchall()
-                if len(records) != 0:
-                    print('Data already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = records))
-                    sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
-                    cursor.execute(sqlite_update_query)
-                    return '(Database {title}):\n{db}\n'.format(title = title, db = cursor.fetchall())
-            except sqlite3.Error:
-                print('\n<--- New database called {title} created. --->\n'.format(title = title))
-                stock_quotes_df.to_sql(title, sqliteConnection, index=False)
-                print('Opened database with a value for {symbol} successfully'.format(symbol = symbol))
-        # Checking for duplicate
-        sqlite_update_query = '''SELECT * FROM {title} WHERE Symbol = \'{symbol}\''''.format(symbol=symbol, title=title)
-        cursor.execute(sqlite_update_query)
-        records = cursor.fetchall()
-        if len(records) != 0:
-            sqlite_update_query = '''UPDATE {title} SET Date = ? AND Open = ? AND High = ? AND Low = ? AND Close = ? AND Volume = ? WHERE Symbol = \'{symbol}\''''.format(title=title, symbol = symbol)
-            columnValues = (int(stock_quotes_df['Date']), float(stock_quotes_df['Open']), float(stock_quotes_df['High']), float(stock_quotes_df['Low']), float(stock_quotes_df['Close']), float(stock_quotes_df['Volume']))
-            cursor.execute(sqlite_update_query, columnValues)
-            print('Replaced database with a value for {symbol} successfully'.format(symbol = symbol))
-        else:
-            stock_quotes_df.to_sql(title, sqliteConnection, index=False, if_exists='append')
-            print('Appended database with a value for {symbol} successfully'.format(symbol = symbol))
-
-
+        # Deleting single record now
+        sql_delete_query = '''DELETE FROM {title} WHERE Symbol = \'{symbol}\''''.format(symbol=symbol, title=title)
+        cursor.execute(sql_delete_query)            
+        df.to_sql(title, sqliteConnection, index=False, if_exists='append')
+        print("D: Deleted record successfully ")
         sqliteConnection.commit()
-        print('Committed to database with a value for {symbol} successfully'.format(symbol = symbol))
-        sqlite_update_query = '''SELECT * FROM {title}'''.format(title = title)
-        cursor.execute(sqlite_update_query)
-        return '(Database {title}):\n{db}\n'.format(title = title, db = cursor.fetchall())
-    
+        print('D: Replaced database with a new value for {symbol} successfully'.format(symbol = symbol))
+        cursor.close()
+
     except sqlite3.Error as error:
-        print('Failed to update {title} database\n'.format(title = title), error)
+        print("D: Failed to delete record from sqlite table", error)
     finally:
         if sqliteConnection:
             sqliteConnection.close()
-            print("Sqlite connection is closed")
+            print("D: The SQLite connection is closed\n")
+
+def readSqliteTable(title, symbol, date):
+    try:
+        sqliteConnection = sqlite3.connect('SQLite_Python.db')
+        cursor = sqliteConnection.cursor()
+        # print("R: Connected to SQLite")
+
+        sqlite_select_query = ''
+        if date is not None:
+            sqlite_select_query = '''SELECT * FROM {title} WHERE Date = {date} AND Symbol = \'{symbol}\''''.format(symbol=symbol, title=title, date=int(date))
+        elif symbol is not None: 
+            sqlite_select_query = '''SELECT * FROM {title} WHERE Symbol = \'{symbol}\''''.format(symbol=symbol, title=title)
+        else:
+            sqlite_select_query = '''SELECT * FROM {title}'''.format(title = title)
+        cursor.execute(sqlite_select_query)
+        record = cursor.fetchall()
+        cursor.close()
+        return record
+    except sqlite3.Error as error:
+        print("R: Failed to read data from sqlite table", error)
+    finally:
+        if sqliteConnection:
+            sqliteConnection.close()
+            # print("R: The SQLite connection is closed\n")
+
+def updateSqliteTable(df, title, symbol):
+    try:
+        sqliteConnection = sqlite3.connect('SQLite_Python.db')
+        cursor = sqliteConnection.cursor()
+        print("U: Connected to SQLite")
+
+        df.to_sql(title, sqliteConnection, index=False, if_exists='append')
+        sqliteConnection.commit()
+        print('U: Updated record for {symbol} successfully'.format(symbol = symbol))
+        cursor.close()
+
+    except sqlite3.Error as error:
+        print("U: Failed to update sqlite table", error)
+    finally:
+        if sqliteConnection:
+            sqliteConnection.close()
+            print("U: The SQLite connection is closed\n")
+
+def get_stock_df(title, symbol, dateA, dateB):
+    stock_quotes = get_stock_quote_data(symbol, dateA, dateB)
+    stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+
+    # Validate
+    if check_if_valid_data(stock_quotes_df):
+        print('Data valid, proceed to Load stage\n <------- - ------- - ------->')
+    else:
+        print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
+        record = readSqliteTable(title, None, None)
+        return '(Database {title}):\n{db}'.format(title = title, db = record)
+
+    # Load
+    for date in stock_quotes_df['Date']:
+        try:
+            record = readSqliteTable(title, symbol, date)
+            if len(record) != 0:
+                print('Data already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = record))
+                record = readSqliteTable(title, None, None)
+                return '(Database {title}):\n{db}\n'.format(title = title, db = record)
+        except sqlite3.Error:
+            print('\n<--- New database called {title} created. --->\n'.format(title = title))
+            updateSqliteTable(stock_quotes_df, title, symbol)            
+            print('Opened database with a value for {symbol} successfully'.format(symbol = symbol))
+    # Checking for duplicate
+    record = readSqliteTable(title, symbol, None)
+    if len(record) != 0:
+        deleteRecord(stock_quotes_df, title, symbol)
+    else:
+        updateSqliteTable(stock_quotes_df, title, symbol)            
+        print('Appended database with a value for {symbol} successfully'.format(symbol = symbol))
+
+    record = readSqliteTable(title, None, None)
+    return '(Database {title}):\n{db}\n'.format(title = title, db = record)
 
 # if __name__ == '__main__':
 #     STOCKS = ['AAPL', 'NKE']
@@ -182,9 +216,8 @@ def get_stock_df(title, symbol, dateA, dateB):
 #     # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
 #     # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
 #     # print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
-#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
-#     print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
-
+#     print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
+#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
 
 
 

@@ -58,14 +58,7 @@ for stock in STOCKS:
     today = today.strftime("%Y-%m-%d")
     print('Here is Today: \n')
     print(today)
-
-    df = get_stock_df('my_stock_list_quotes', stock, today, today)
-    print('\n The {stock} DF: \n {df} \n'.format(stock=stock, df=df))
-
-    if STOCK_LIST_DF.to_numpy() is None:
-        STOCK_LIST_DF = df
-        continue
-    STOCK_LIST_DF.append(df, ignore_index=True)
+    STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, today, today)
 
 print('Here is a list of stock data of the most recent \'weekday\' before today.')
 print(STOCK_LIST_DF.to_numpy())
