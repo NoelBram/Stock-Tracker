@@ -47,7 +47,7 @@ IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_na
 
 # Get a list of stock data of the most recent 'weekday' before today.
 def prev_weekday(adate):
-    adate -= datetime.timedelta(days=2)
+    adate -= datetime.timedelta(days=3)
     while adate.weekday() > 4: # Mon-Fri are 0-4
         adate -= datetime.timedelta(days=1)
     return adate

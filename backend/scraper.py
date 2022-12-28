@@ -148,7 +148,7 @@ def readSqliteTable(title, symbol, date):
         cursor.execute(sqlite_select_query)
         record = cursor.fetchall()
         cursor.close()
-        return record
+        return pd.DataFrame(data = record, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
     except sqlite3.Error as error:
         print("R: Failed to read data from sqlite table", error)
     finally:
@@ -184,40 +184,43 @@ def get_stock_df(title, symbol, dateA, dateB):
     else:
         print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
         record = readSqliteTable(title, None, None)
-        return '(Database {title}):\n{db}'.format(title = title, db = record)
+        print('(Database {title}):'.format(title = title))
+        return record
 
     # Load
     for date in stock_quotes_df['Date']:
         try:
             record = readSqliteTable(title, symbol, date)
-            if len(record) != 0:
+            if not record.empty:
                 print('Data already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = record))
                 record = readSqliteTable(title, None, None)
-                return '(Database {title}):\n{db}\n'.format(title = title, db = record)
-        except sqlite3.Error:
+                print('(Database {title}):'.format(title = title))
+                return record
+        except AttributeError:
             print('\n<--- New database called {title} created. --->\n'.format(title = title))
             updateSqliteTable(stock_quotes_df, title, symbol)            
             print('Opened database with a value for {symbol} successfully'.format(symbol = symbol))
     # Checking for duplicate
     record = readSqliteTable(title, symbol, None)
-    if len(record) != 0:
+    if not record.empty:
         deleteRecord(stock_quotes_df, title, symbol)
     else:
         updateSqliteTable(stock_quotes_df, title, symbol)            
         print('Appended database with a value for {symbol} successfully'.format(symbol = symbol))
 
     record = readSqliteTable(title, None, None)
-    return '(Database {title}):\n{db}\n'.format(title = title, db = record)
+    print('(Database {title}):'.format(title = title))
+    return record
 
-# if __name__ == '__main__':
-#     STOCKS = ['AAPL', 'NKE']
-#     DATE = ['2022-04-04', '2022-04-08']
-#     TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
-#     # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
-#     # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
-#     # print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
-#     print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
-#     # print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
+if __name__ == '__main__':
+    STOCKS = ['AAPL', 'NKE']
+    DATE = ['2022-04-04', '2022-04-08']
+    TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
+    # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
+    # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
+    # print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
+    # print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
+    print(get_stock_df(TITLE[1], STOCKS[1], DATE[1], DATE[1]))
 
 
 
