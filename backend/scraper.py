@@ -112,7 +112,7 @@ def check_if_valid_data(df: pd.DataFrame) -> bool:
 
     return True
 
-def get_stock_df(sybol, dateA, dateB):
+def get_stock_df(title, sybol, dateA, dateB):
     stock_quotes = get_stock_quote_data(sybol, dateA, dateB)
 
     # To test the output length of each collumn.
@@ -126,29 +126,36 @@ def get_stock_df(sybol, dateA, dateB):
     if check_if_valid_data(stock_quotes_df):
         print('Data valid, proceed to Load stage')
     else:
-        print('Data Not valid, can\'t proceed to Load stage')
-        return pd.DataFrame()
+        print('Data Not valid, can\'t proceed to Load stage \n DF: \n{df}\n'.format(df = stock_quotes_df))
+        return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
 
     # Load
+    for date in stock_quotes_df['Date']:
+        try:
+            data = pd.read_sql_query('SELECT * FROM {title} where Date = {date}'.format(sybol=sybol, title=title, date=int(date)), conn)
+            if data is not None:
+                print('\nData already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = data))
+                return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
+        except pd.io.sql.DatabaseError:
+            print('\n<--- New database called {title} created. --->\n'.format(title = title))
+
     try:
-        stock_quotes_df.to_sql('my_stock_quotes', conn, index=False, if_exists='fail')
+        stock_quotes_df.to_sql(title, conn, index=False, if_exists='replace')
         print('Opened database successfully')
     except:
-        print('Data already exists in the database')
-        return pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
+        print('ERROR: cound not open database')
 
     conn.commit()
     print('Committed to database successfully')
 
-    return pd.read_sql_query('SELECT * FROM my_stock_quotes', conn)
+    return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
 
-
-# if __name__ == '__main__':
-#     STOCK_NAME = 'AAPL'
-#     STOCKS = ['AAPL', 'NKE']
-#     # print(get_stock_quote(STOCK_NAME, '2022-04-04', '2022-04-08'))
-#     # print(get_stock_quote_data(STOCK_NAME, '2022-04-04', '2022-04-08'))
-#     # print(get_stock_df(STOCK_NAME, '2022-04-04', '2022-04-08'))
-#     print(get_stock_df(STOCK_NAME, '2022-12-23', '2022-12-23'))
+if __name__ == '__main__':
+    STOCKS = ['AAPL', 'NKE']
+    DATE = ['2022-04-04', '2022-04-08']
+    TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
+    # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
+    # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
+    print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
 
 

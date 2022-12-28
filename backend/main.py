@@ -51,42 +51,27 @@ def prev_weekday(adate):
     while adate.weekday() > 4: # Mon-Fri are 0-4
         adate -= datetime.timedelta(days=1)
     return adate
+
 STOCK_LIST_DF = pd.DataFrame()
 for stock in STOCKS:
     today = prev_weekday(datetime.datetime.now())
     today = today.strftime("%Y-%m-%d")
     print('Here is Today: \n')
     print(today)
-    df = get_stock_df(stock, today, today)
+
+    df = get_stock_df('my_stock_list_quotes', stock, today, today)
+    print('\n The {stock} DF: \n {df} \n'.format(stock=stock, df=df))
+
     if STOCK_LIST_DF.empty:
         STOCK_LIST_DF = df
         continue
-    STOCK_LIST_DF.merge(df)
-    # while True:
-    #     try :
-    #         print('Here is Today: \n')
-    #         print(today)
-    #         data = get_stock_df(stock, today, today)
-    #         if data == None:
-    #             continue
-    #         STOCK_LIST_DF.append()
-    #         days += 1
-    #         today = datetime.datetime.now() - datetime.timedelta(days=days)
-    #         today = today.strftime("%Y-%m-%d")  
-    #         # To check STOCK_LIST_DF has valid input(s).
-    #         # print('{today} equals; \n{value}\n'.format(today=today, value=get_stock_df(stock, today, today)))
-    #     except TypeError:
-    #         days += 1
-    #         today = datetime.datetime.now() - datetime.timedelta(days=days)
-    #         today = today.strftime("%Y-%m-%d")  
-    #         continue
-        # break
+
+    STOCK_LIST_DF.append(df, ignore_index=True)
 
 print('Here is a list of stock data of the most recent \'weekday\' before today.')
 print(STOCK_LIST_DF.to_numpy())
 
-# time.sleep(60)
-
+# Dataframe to graph out the forcast in dropdown.
 STOCK_DF = pd.DataFrame()
 
 test_size = 30
