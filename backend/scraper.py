@@ -124,23 +124,24 @@ def get_stock_df(title, sybol, dateA, dateB):
     # print('Going to Validate...')
     # Validate
     if check_if_valid_data(stock_quotes_df):
-        print('Data valid, proceed to Load stage')
+        print('Data valid, proceed to Load stage\n')
     else:
-        print('Data Not valid, can\'t proceed to Load stage \n DF: \n{df}\n'.format(df = stock_quotes_df))
+        print('Data Not valid, can\'t proceed to Load stage\n DF: \n{df}\n'.format(df = stock_quotes_df))
         return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
 
     # Load
     for date in stock_quotes_df['Date']:
         try:
             data = pd.read_sql_query('SELECT * FROM {title} where Date = {date}'.format(sybol=sybol, title=title, date=int(date)), conn)
-            if data is not None:
-                print('\nData already exists in the database.\n(Failed data I/P):\n{data}\n'.format(data = data))
+            if not data.empty:
+                print('Data already exists in the database.')
+                print('(Failed data I/P):\n{data}\n'.format(data = data))
                 return '(Database {title}):\n{db}'.format(title = title, db = pd.read_sql_query('SELECT * FROM {title}'.format(title = title), conn))
         except pd.io.sql.DatabaseError:
             print('\n<--- New database called {title} created. --->\n'.format(title = title))
 
     try:
-        stock_quotes_df.to_sql(title, conn, index=False, if_exists='replace')
+        stock_quotes_df.to_sql(title, conn, index=False, if_exists='append')
         print('Opened database successfully')
     except:
         print('ERROR: cound not open database')
@@ -156,6 +157,6 @@ if __name__ == '__main__':
     TITLE = ['my_stock_quotes', 'my_stock_list_quotes']
     # print(get_stock_quote(STOCKS[1], DATE[0], DATE[1]))
     # print(get_stock_quote_data(STOCKS[1], DATE[0], 'DATE[1]))
-    print(get_stock_df(TITLE[1], STOCKS[0], DATE[0], DATE[0]))
+    print(get_stock_df(TITLE[1], STOCKS[1], DATE[0], DATE[0]))
 
 
