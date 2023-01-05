@@ -2,4 +2,4 @@
 
 ### Overview
 
-An application for traking stocks using ML. 
+An application for traking and forcasting stock prices using ML.
