@@ -62,19 +62,22 @@ STOCK_LIST_DF = readSqliteTable('my_stock_list_quotes', None, None)
 # print(STOCK_LIST_DF.to_numpy())
 
 # # Dataframe to graph out the forcast in dropdown.
-STOCK_DF = get_stock_df('my_stock_quotes', STOCK_NAME, '2014-12-23', TODAY)
+# STOCK_DF = get_stock_df('my_stock_quotes', STOCK_NAME, '2014-12-23', TODAY)
 STOCK_DF = readSqliteTable('my_stock_quotes', None, None)
 
 print('Here is stock data for {stock}.'.format(stock = STOCK_NAME))
 print(STOCK_DF.to_numpy())
 print(STOCK_DF.info())
 
+# Hyperparameters
 TEST_SIZE = 30
 RANDOM_STATE = 42
-OPTIMIZER = 'adam'
 LOSS = 'mean_squared_error'
 MODEL_TEST_SIZE = TEST_SIZE/258
 EPOCHS = 50
+LEARNING_RATE = 0.000055
+REGL1 = 0.01
+REGL2 = 0.01
 
 # @app.route('/results.png')
 # def get_results():
@@ -89,18 +92,23 @@ if __name__ == '__main__':
 
     X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)
 
+    tf.random.set_seed(RANDOM_STATE)
+
     # Define the model
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(units=64, activation='relu', input_shape=(X_train.shape[1],)))
+    # model.add(tf.keras.layers.Dense(units=64, activation='relu', input_shape=(X_train.shape[1],), kernel_regularizer=tf.keras.regularizers.l1(REGL1)))
+    # model.add(tf.keras.layers.Dense(units=64, activation='relu', input_shape=(X_train.shape[1],), kernel_regularizer=tf.keras.regularizers.l2(REGL2)))
+    model.add(tf.keras.layers.Dense(units=64, input_shape=(X_train.shape[1],), activation='relu'))
     model.add(tf.keras.layers.Dense(units=64, activation='relu'))
     model.add(tf.keras.layers.Dense(units=64, activation='relu'))
     model.add(tf.keras.layers.Dense(units=1))
-
     # Compile the model
-    model.compile(optimizer=OPTIMIZER, loss=LOSS)
+    # Create the Adam optimizer with a learning rate
+    optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
+    model.compile(optimizer=optimizer, loss=LOSS)
 
     # Train the model
-    history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=EPOCHS)
+    history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=EPOCHS, shuffle=False)
 
     # Evaluate the model
     mse = model.evaluate(X_test, y_test, verbose=0)
