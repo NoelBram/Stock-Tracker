@@ -1,5 +1,8 @@
 #Flask imports
 from flask import Flask, render_template, send_file, make_response, url_for, Response
+import hyperopt
+from hyperopt import fmin, tpe, hp
+
 import sys
 import warnings
 if not sys.warnoptions:
@@ -11,7 +14,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from keras import backend, layers
-from keras.layers import Dense, Input, RNN
+from keras.layers import Bidirectional, Dense, Dropout, Input, Bidirectional, RNN 
 
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -31,6 +34,8 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from flask_sqlalchemy import SQLAlchemy
 from scraper import *
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import statsmodels.api as sm
 
 
 CHARTS_FOLDER = os.path.join('static', 'charts')
@@ -79,48 +84,182 @@ LEARNING_RATE = 0.000055
 REGL1 = 0.01
 REGL2 = 0.01
 
-# @app.route('/results.png')
-# def get_results():
-if __name__ == '__main__':
+class ARIMAModel:
+    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
+        self.X_test = X_test
+        self.y_test = y_test
+
+    def fit(self, p, d, q):
+        # Fit the ARIMA model to the training data
+        model = sm.tsa.statespace.SARIMAX(self.y_train, order=(p, d, q))
+        self.model_fit = model.fit()
+
+    def evaluate(self):
+        # Make predictions on the validation set
+        y_pred_val = self.model_fit.predict(start=len(self.y_train), end=len(self.y_train)+len(self.y_val)-1, dynamic=False)
+
+        # Calculate the mean squared error on the validation set
+        mse_val = ((y_pred_val - self.y_val) ** 2).mean()
+
+        # Make predictions on the test set
+        y_pred_test = self.model_fit.predict(start=len(self.y_train)+len(self.y_val), end=len(self.y_train)+len(self.y_val)+len(self.y_test)-1, dynamic=False)
+
+        # Calculate the mean squared error on the test set
+        mse_test = ((y_pred_test - self.y_test) ** 2).mean()
+
+        return mse_val, mse_test
+
+class StockMLModel(tf.keras.Model):
+    def __init__(self):
+        super(StockMLModel, self).__init__()
+        self.dense1 = tf.keras.layers.Dense(units=64, activation='relu')
+        self.dense2 = tf.keras.layers.Dense(units=64, activation='relu')
+        self.dense3 = tf.keras.layers.Dense(units=64, activation='relu')
+        self.dense4 = tf.keras.layers.Dense(units=1)
+
+    def call(self, inputs):
+        x = self.dense1(inputs)
+        x = self.dense2(x)
+        x = self.dense3(x)
+        return self.dense4(x)
+
+class StockMLModelWithTraining(tf.keras.Model):
+    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
+        super(StockMLModelWithTraining, self).__init__()
+        self.model = StockMLModel()
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
+        self.X_test = X_test
+        self.y_test = y_test
+
+    def compile_and_fit(self, optimizer, loss, epochs):
+        # Compile the model
+        self.model.compile(optimizer=optimizer, loss=loss)
+
+        # Fit the model to the training data
+        self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=epochs, shuffle=False)
+
+def forecast(self, future_forecast_days):
+    # Get the last day of the training data
+    last_day_of_train_data = self.X_train['Date'].iloc[-1]
+    # Create a dataframe for the future forecast
+    future_forecast = pd.DataFrame()
+    # Add the dates for the future forecast
+    future_forecast['Date'] = pd.date_range(last_day_of_train_data, periods=future_forecast_days+1, freq='D')[1:]
+    # Add the symbols for the future forecast
+    future_forecast['Symbol'] = self.X_train['Symbol'].iloc[0]
+    # Merge the input data for the future forecast with the X_train data
+    future_forecast = pd.merge(future_forecast, self.X_train, on='Symbol')
+    # Drop the 'Date' and 'Symbol' columns from the input data
+    future_forecast.drop(columns=['Date', 'Symbol'], inplace=True)
+    # Use the model to predict the closing price for the future forecast days
+    future_forecast['Close'] = self.model.predict(future_forecast)
+    return future_forecast
+
+def preprocess(X, y):
+    # Normalize the data
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+    
+    # Impute missing values
+    X = pd.DataFrame(X).fillna(0).values
+    
+    return X, y
+
+def postprocess(forecasts):
+    # Inverse transform the forecasts using the scaler
+    scaler = StandardScaler()
+    forecasts = scaler.inverse_transform(forecasts)
+    
+    return forecasts
+
+# if __name__ == '__main__':
+@app.route('/forecast.png')
+def get_forecast():
     # Extract the input features and target variable
-    input_values = STOCK_DF[['Open', 'High', 'Low', 'Close', 'Volume']]
+    input_values = STOCK_DF[['Open', 'High', 'Low', 'Close', 'Volume', 'Date']]
     target_value = STOCK_DF['Close']
+
+    input_values, target_value = preprocess(input_values, target_value)
 
     # Calculate the variance of the target variable
     variance = np.var(target_value)
     target_value_summary = target_value.describe()
-
-    X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)
-
+    
+    # Split the data into training, validation, and test sets
+    X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=0.1, random_state=RANDOM_STATE)
+    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.1, random_state=RANDOM_STATE)
+    
     tf.random.set_seed(RANDOM_STATE)
-
-    # Define the model
-    model = tf.keras.Sequential()
-    # model.add(tf.keras.layers.Dense(units=64, activation='relu', input_shape=(X_train.shape[1],), kernel_regularizer=tf.keras.regularizers.l1(REGL1)))
-    # model.add(tf.keras.layers.Dense(units=64, activation='relu', input_shape=(X_train.shape[1],), kernel_regularizer=tf.keras.regularizers.l2(REGL2)))
-    model.add(tf.keras.layers.Dense(units=64, input_shape=(X_train.shape[1],), activation='relu'))
-    model.add(tf.keras.layers.Dense(units=64, activation='relu'))
-    model.add(tf.keras.layers.Dense(units=64, activation='relu'))
-    model.add(tf.keras.layers.Dense(units=1))
-    # Compile the model
+    
     # Create the Adam optimizer with a learning rate
     optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE)
-    model.compile(optimizer=optimizer, loss=LOSS)
+    
+    # Initialize the machine learning model, then compile 
+    stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
+    stock_model.compile_and_fit(optimizer, LOSS, EPOCHS)
+    ml_model = stock_model.model
+    # Make forecasts for the next week using the fitted model
+    input_data_for_next_week = np.array(range(7)).reshape((7, 1))
 
-    # Train the model
-    history = model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=EPOCHS, shuffle=False)
+    next_week_forecasting = ml_model.predict(input_data_for_next_week)
+    next_week_forecasting = postprocess(next_week_forecasting)
+
+    # Plot the forecast and the true values
+    plt.plot(next_week_forecasting, label='Forecast')
+    plt.plot(input_data_for_next_week, label='True Values')
+    plt.legend()
+    
+    # Save the plot to a temporary file
+    plt.savefig('temp.png')
+    
+    # Send the plot back to the client
+    return send_file('temp.png', mimetype='image/png')
 
     # Evaluate the model
-    mse = model.evaluate(X_test, y_test, verbose=0)
+    # mse = ml_model.evaluate(X_test, y_test, verbose=0)
 
-    print('Here is the summary of the target varable. \n{sum}'.format(sum = target_value_summary))
-    print('mse      ', mse)
-    print('var      ', variance)
-    if mse < (variance*0.66):
-        print('Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= mse, var= variance))
-    else:
-        print('Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance)))
+    # print('Here is the summary of the target varable. \n{sum}'.format(sum = target_value_summary))
+    # print('mse      ', mse)
+    # print('var      ', variance)
+    # if mse < (variance*0.66):
+    #     print('Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= mse, var= variance))
+    # else:
+    #     print('Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance)))
 
+# if __name__ == '__main__':
+#     # Define the search space for the hyperparameters
+#     space = hp.choice('model_type', [
+#         {
+#             'type': 'linear',
+#             'regularization': hp.lognormal('regularization', 0, 1)
+#         },
+#         {
+#             'type': 'random_forest',
+#             'max_depth': hp.quniform('max_depth', 2, 10, 1),
+#             'min_samples_split': hp.quniform('min_samples_split', 2, 10, 1)
+#         }
+#     ])
+
+#     # Define the objective function to be minimized
+#     def objective(params):
+#         model = create_model(params)  # Function to create the model with the specified hyperparameters
+#         model.fit(X_train, y_train)
+#         y_pred = model.predict(X_val)
+#         return mean_squared_error(y_val, y_pred)
+
+#     # Run the optimization
+#     best = fmin(objective, space, algo=tpe.suggest, max_evals=100)
+
+#     # Use the optimal hyperparameters to create the final model
+#     optimal_model = create_model(best)
+#     optimal_model.fit(X_train, y_train)
     #-----------------------------------------------------------
     # Retrieve a list of list results on training and test data
     # sets for each training epoch
@@ -153,16 +292,16 @@ if __name__ == '__main__':
 #     plt.ylabel("Accuracy")
 #     plt.legend(["Accuracy", "Validation Accuracy"])
 
-# sio = SocketIO(app)
+sio = SocketIO(app)
 
-# thread = None
-# thread_lock = Lock()
+thread = None
+thread_lock = Lock()
 
-# @app.route('/')
-# @app.route('/results', methods=("POST", "GET"))
-# def index():
-#     global thread
-#     return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF)
+@app.route('/')
+@app.route('/results', methods=("POST", "GET"))
+def index():
+    global thread
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF)
 
-# if __name__ == '__main__':
-#     app.run(host='0.0.0.0', port=80, debug = True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80, debug = True)
