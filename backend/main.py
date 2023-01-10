@@ -36,7 +36,7 @@ from scraper import *
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import statsmodels.api as sm
-
+from dateutil.rrule import rrule, DAILY, MO, TU, WE, TH, FR
 
 CHARTS_FOLDER = os.path.join('static', 'charts')
 
@@ -45,6 +45,10 @@ app.config['CHART_FOLDER'] = CHARTS_FOLDER
 
 STOCK_NAME = 'AAPL'
 STOCKS = ['AAPL', 'NKE']
+YY = '2022'
+MM = '11'
+DD = '02'
+
 IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 
 # Get a list of stock data of the most recent 'weekday' before today.
@@ -57,18 +61,32 @@ TODAY = prev_weekday(datetime.datetime.now())
 TODAY = TODAY.strftime("%Y-%m-%d")
 print('\nHere is most recent weekday before today.: {day}\n'.format (day = TODAY))
 
-# STOCK_LIST_DF = pd.DataFrame()
-# for stock in STOCKS:
-#     STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-
 STOCK_LIST_DF = readSqliteTable('my_stock_list_quotes', None, None)
+if STOCK_LIST_DF is None:
+    STOCK_LIST_DF = pd.DataFrame()
+    for stock in STOCKS:
+        STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
 
 # print('Here is a list of stock data of the most recent \'weekday\' before today.')
 # print(STOCK_LIST_DF.to_numpy())
 
 # # Dataframe to graph out the forcast in dropdown.
-# STOCK_DF = get_stock_df('my_stock_quotes', STOCK_NAME, '2014-12-23', TODAY)
 STOCK_DF = readSqliteTable('my_stock_quotes', None, None)
+if STOCK_DF is None:
+    STOCK_DF = pd.DataFrame()
+    STOCK_DF = get_stock_df('my_stock_quotes', STOCK_NAME, '{y}-{m}-{d}'.format(y = YY, m = MM, d = DD), TODAY)
+
+# Set the start date and end date
+start_date = datetime.datetime(int(YY), int(MM), int(DD))
+end_date = datetime.datetime(2023, 1, 6)
+
+# Generate a range of weekdays (Monday through Friday)
+weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR),dtstart=start_date, until=end_date))
+weekdays = [(datetime.datetime.strptime(weekday.strftime("%Y-%m-%d"), "%Y-%m-%d")).timestamp() for weekday in weekdays]
+future_weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR), count=30, dtstart=end_date))
+future_weekdays = [weekday.timestamp() for weekday in future_weekdays]
+
+# print('Last Week Days: ', weekdays[-10:])
 
 print('Here is stock data for {stock}.'.format(stock = STOCK_NAME))
 print(STOCK_DF.to_numpy())
@@ -186,8 +204,6 @@ def get_forecast():
     input_values = STOCK_DF[['Open', 'High', 'Low', 'Close', 'Volume', 'Date']]
     target_value = STOCK_DF['Close']
 
-    input_values, target_value = preprocess(input_values, target_value)
-
     # Calculate the variance of the target variable
     variance = np.var(target_value)
     target_value_summary = target_value.describe()
@@ -205,19 +221,30 @@ def get_forecast():
     stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
     stock_model.compile_and_fit(optimizer, LOSS, EPOCHS)
     ml_model = stock_model.model
-    # Make forecasts for the next week using the fitted model
-    input_data_for_next_week = np.array(range(7)).reshape((7, 1))
 
-    next_week_forecasting = ml_model.predict(input_data_for_next_week)
-    next_week_forecasting = postprocess(next_week_forecasting)
+    # Make forecasts for the next week using the fitted model
+    input_data_for_next_week = array = np.zeros((6, 7))
+
+    next_week_forecasting = ml_model.predict(X_val)
+    # input_data_for_next_week = pd.DataFrame(data = next_week_forecasting, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+
+    print('Next Week Forecasting: \n', next_week_forecasting)
 
     # Plot the forecast and the true values
-    plt.plot(next_week_forecasting, label='Forecast')
-    plt.plot(input_data_for_next_week, label='True Values')
-    plt.legend()
+    fig, ax = plt.subplots(figsize = (25,8))
+    cd = target_value[-20:]
+    ax.plot(weekdays[-len(cd):], cd, label='Current Data')
+    ax.plot(future_weekdays, next_week_forecasting[:30], label='Next Month\'s Forecast')
+    ax.set_ylabel('Stock Price (USD)')
+    ax.set_xlabel('Date (YYYY-MM-DD)')
+    ax.legend()
+
+     # Evaluate the model
+    mse = ml_model.evaluate(X_val, y_val, verbose=0)
+    ax.set_title('Forecast Mean Squared Error: %.4f'%(np.mean(mse)))
     
     # Save the plot to a temporary file
-    plt.savefig('temp.png')
+    fig.savefig('temp.png')
     
     # Send the plot back to the client
     return send_file('temp.png', mimetype='image/png')
@@ -301,7 +328,7 @@ thread_lock = Lock()
 @app.route('/results', methods=("POST", "GET"))
 def index():
     global thread
-    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF)
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug = True)

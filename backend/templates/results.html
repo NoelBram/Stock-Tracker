@@ -17,7 +17,7 @@
     {% for index, row in stocks.iterrows() %}
       <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ row[0] }}" role="button" aria-expanded="false" aria-controls="collapseExample">
           <td>{{ row[0] }}</td>
-          <td>{{ row[1] }}</td>
+          <td>{{ today }}</td>
           <td>{{ row[2] }}</td>
           <td>{{ row[3] }}</td>
           <td>{{ row[4] }}</td>

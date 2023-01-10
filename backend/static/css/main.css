@@ -1,14 +1,7 @@
-* {
-  margin: 0;
-  padding: 0;
-}
 html, body {
   background-color: #f3effe;
   padding-top: 50px;
   height: 100%;
-}
-body * {
-  box-sizing: border-box;
 }
 
 .pic-img{
@@ -57,33 +50,31 @@ body * {
 /*--------------------------------------------------------------
 # Footer
 --------------------------------------------------------------*/
-#footer {
+.footer {
   background: #e3d7ff;
   padding: 30px 0;
   color: #303763;
   font-size: 14px;
   text-align: center;
-  padding: 20px;
-  position:fixed;
-  bottom:0;
-  width:100%;
-  height:130px;   /* Height of the footer */
-  overflow: hidden;
+  position: relative;
+  bottom: 0px;
+  width: 100%;
+  overflow: auto;
   left:0px;
+  z-index: 997;
 }
-#footer .credits {
+.footer .credits {
   padding-top: 5px;
   font-size: 13px;
 }
 
-#footer .credits a {
+.footer .credits a {
   text-decoration: none;
   color: #7360c5;
 }
 .credits a:hover:enabled {
   color: #303763;
 }
-
 /*--------------------------------------------------------------
 # Table
 --------------------------------------------------------------*/
@@ -93,11 +84,10 @@ body * {
   box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.1);
   max-width: calc(100% - 2em);
   margin: 1em auto;
-  overflow: hidden;
+  overflow:scroll;
   width: 1000px;
+  position: relative;
   text-align: center;
-  table-layout: auto;
-
 }
 
 .table .title {
@@ -127,6 +117,7 @@ body * {
   position: relative;
   text-transform: uppercase;
   text-align: center;
+  position: relative;
 }
 .table tr th {
   background-color: #e3d7ff;
@@ -135,6 +126,7 @@ body * {
   line-height: 1.7;
   font-size: 17px;
   font-weight: 700;
+  position: relative;
 }
 .table tr td {
   line-height: 1.7;
@@ -142,10 +134,13 @@ body * {
   font-weight: 500;
   border-bottom: 1px solid #e3d7ff;
   padding: 0;
+  position: relative;
 }
 .table td:first-child{
   text-align: center;
   table-layout: fixed;
+  position: relative;
+
 }
 .table .symbol-link{
   text-decoration: none;
