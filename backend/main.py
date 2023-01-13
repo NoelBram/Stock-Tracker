@@ -13,8 +13,9 @@ import io
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from keras import backend, layers
+from keras import backend, layers, metrics
 from keras.layers import Bidirectional, Dense, Dropout, Input, Bidirectional, RNN 
+from keras.losses import mean_squared_error
 
 import pandas as pd
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -80,10 +81,13 @@ if STOCK_DF is None:
 start_date = datetime.datetime(int(YY), int(MM), int(DD))
 end_date = datetime.datetime(2023, 1, 6)
 
+# Pre-hyperparameters
+DAYS = 30
+
 # Generate a range of weekdays (Monday through Friday)
 weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR),dtstart=start_date, until=end_date))
 weekdays = [(datetime.datetime.strptime(weekday.strftime("%Y-%m-%d"), "%Y-%m-%d")).timestamp() for weekday in weekdays]
-future_weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR), count=30, dtstart=end_date))
+future_weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR), count=DAYS, dtstart=end_date))
 future_weekdays = [weekday.timestamp() for weekday in future_weekdays]
 
 # print('Last Week Days: ', weekdays[-10:])
@@ -101,21 +105,33 @@ EPOCHS = 50
 LEARNING_RATE = 0.000055
 REGL1 = 0.01
 REGL2 = 0.01
+WEIGHT = 1.000001
 
+ARIMA_P = 2
+ARIMA_D = 1
+ARIMA_Q = 0
+
+# AutoRegressive Integrated Moving Average Model
 class ARIMAModel:
-    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
-        self.X_train = X_train
+    def __init__(self, y_train, y_val, y_test):
         self.y_train = y_train
-        self.X_val = X_val
         self.y_val = y_val
-        self.X_test = X_test
         self.y_test = y_test
+        self.model_fit = None
 
     def fit(self, p, d, q):
         # Fit the ARIMA model to the training data
-        model = sm.tsa.statespace.SARIMAX(self.y_train, order=(p, d, q))
-        self.model_fit = model.fit()
-
+        self.model = sm.tsa.statespace.SARIMAX(self.y_train, order=(p, d, q))
+        self.model_fit = self.model.fit(disp=0)
+         
+    def forecast(self, days):
+        if self.model_fit is None:
+            raise ValueError("The model must be fitted before forecasting")
+        # Make predictions for the next days
+        forecast = self.model_fit.get_forecast(days=days, alpha=0.05) # with confidence intervals:
+        conf_int = forecast.conf_int(alpha=0.05)
+        return forecast.prediction_mean, conf_int
+        
     def evaluate(self):
         # Make predictions on the validation set
         y_pred_val = self.model_fit.predict(start=len(self.y_train), end=len(self.y_train)+len(self.y_val)-1, dynamic=False)
@@ -131,13 +147,15 @@ class ARIMAModel:
 
         return mse_val, mse_test
 
+
+# ML Model using Liner Regresion
 class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
-        self.dense1 = tf.keras.layers.Dense(units=64, activation='relu')
-        self.dense2 = tf.keras.layers.Dense(units=64, activation='relu')
-        self.dense3 = tf.keras.layers.Dense(units=64, activation='relu')
-        self.dense4 = tf.keras.layers.Dense(units=1)
+        self.dense1 = Dense(units=64, activation='relu')
+        self.dense2 = Dense(units=64, activation='relu')
+        self.dense3 = Dense(units=64, activation='relu')
+        self.dense4 = Dense(units=1)
 
     def call(self, inputs):
         x = self.dense1(inputs)
@@ -158,7 +176,7 @@ class StockMLModelWithTraining(tf.keras.Model):
 
     def compile_and_fit(self, optimizer, loss, epochs):
         # Compile the model
-        self.model.compile(optimizer=optimizer, loss=loss)
+        self.model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', 'mse'])
 
         # Fit the model to the training data
         self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=epochs, shuffle=False)
@@ -211,7 +229,9 @@ def get_forecast():
     # Split the data into training, validation, and test sets
     X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=0.1, random_state=RANDOM_STATE)
     X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.1, random_state=RANDOM_STATE)
-    
+    # Add more weight to the last input data
+    X_train.iloc[:, -1] = X_train.iloc[:, -1] * WEIGHT
+
     tf.random.set_seed(RANDOM_STATE)
     
     # Create the Adam optimizer with a learning rate
@@ -220,28 +240,55 @@ def get_forecast():
     # Initialize the machine learning model, then compile 
     stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
     stock_model.compile_and_fit(optimizer, LOSS, EPOCHS)
+
     ml_model = stock_model.model
+    ml_forecasting = ml_model.predict(X_val)
 
-    # Make forecasts for the next week using the fitted model
-    input_data_for_next_week = array = np.zeros((6, 7))
+    print('Next Week Forecasting: \n', ml_forecasting)
 
-    next_week_forecasting = ml_model.predict(X_val)
-    # input_data_for_next_week = pd.DataFrame(data = next_week_forecasting, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+    # Instantiate the model with the training, validation, and test sets
+    arima_model = ARIMAModel(y_train, y_val, y_test)
 
-    print('Next Week Forecasting: \n', next_week_forecasting)
+    arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
+    arima__forecasting, conf_int = arima_model.forecast(days=DAYS)
+    print("The arima_forecast: ", arima__forecasting)
+
+    # Evaluate the model
+    mse = np.mean(ml_model.evaluate(X_val, y_val, verbose=0))
+    print('The Scores are ', mse)
+    result = ''
+    if mse < (variance*0.66):
+        result += 'Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
+    else:
+        result += 'Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
+
+        # Fit the model with p, d, and q values
+    arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
+    mse_val, mse_test = arima_model.evaluate()
 
     # Plot the forecast and the true values
     fig, ax = plt.subplots(figsize = (25,8))
     cd = target_value[-20:]
-    ax.plot(weekdays[-len(cd):], cd, label='Current Data')
-    ax.plot(future_weekdays, next_week_forecasting[:30], label='Next Month\'s Forecast')
+    # ax.plot(weekdays[-len(cd):], cd, label='Current Data')
+
+    # ax.plot([], [], label='ML Model: Mean Squared Error:  %.4f'%mse, alpha=0)
+    # ax.plot(future_weekdays, ml_forecasting[:DAYS], label='Next Month\'s Forecast')
+    # ax.plot([], [], label='', alpha=0)
+
+    ax.plot([], [], label='ARIMA Model: Mean Squared Error on test set is {t} validation set is {v}'.format(t = int(mse_test), v= int(mse_val)), alpha=0)
+    plt.plot(weekdays[-len(cd):], y_test[-20:], label='Actual', color='red')
+    plt.fill_between(conf_int.index, conf_int.iloc[:,0], conf_int.iloc[:,1], color='pink')
+    plt.plot(future_weekdays, arima__forecasting, label='forecast')
+    ax.plot([], [], label='', alpha=0)
+
+    ax.plot([], [], label=result, alpha=0)
+   
     ax.set_ylabel('Stock Price (USD)')
     ax.set_xlabel('Date (YYYY-MM-DD)')
+    
     ax.legend()
 
-     # Evaluate the model
-    mse = ml_model.evaluate(X_val, y_val, verbose=0)
-    ax.set_title('Forecast Mean Squared Error: %.4f'%(np.mean(mse)))
+    ax.set_title('Stock Price Forecast')
     
     # Save the plot to a temporary file
     fig.savefig('temp.png')
@@ -255,10 +302,6 @@ def get_forecast():
     # print('Here is the summary of the target varable. \n{sum}'.format(sum = target_value_summary))
     # print('mse      ', mse)
     # print('var      ', variance)
-    # if mse < (variance*0.66):
-    #     print('Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= mse, var= variance))
-    # else:
-    #     print('Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance)))
 
 # if __name__ == '__main__':
 #     # Define the search space for the hyperparameters
