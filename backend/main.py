@@ -128,9 +128,9 @@ class ARIMAModel:
         if self.model_fit is None:
             raise ValueError("The model must be fitted before forecasting")
         # Make predictions for the next days
-        forecast = self.model_fit.get_forecast(days=days, alpha=0.05) # with confidence intervals:
+        forecast = self.model_fit.get_forecast(steps=days, alpha=0.05) # with confidence intervals:
         conf_int = forecast.conf_int(alpha=0.05)
-        return forecast.prediction_mean, conf_int
+        return forecast.predicted_mean, conf_int
         
     def evaluate(self):
         # Make predictions on the validation set
@@ -244,14 +244,14 @@ def get_forecast():
     ml_model = stock_model.model
     ml_forecasting = ml_model.predict(X_val)
 
-    print('Next Week Forecasting: \n', ml_forecasting)
+    # print('The ML Model Forecast:\n', ml_forecasting)
 
     # Instantiate the model with the training, validation, and test sets
     arima_model = ARIMAModel(y_train, y_val, y_test)
 
     arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
     arima__forecasting, conf_int = arima_model.forecast(days=DAYS)
-    print("The arima_forecast: ", arima__forecasting)
+    # print("The ARIMA Model Forecast:\n", arima__forecasting)
 
     # Evaluate the model
     mse = np.mean(ml_model.evaluate(X_val, y_val, verbose=0))
@@ -269,15 +269,15 @@ def get_forecast():
     # Plot the forecast and the true values
     fig, ax = plt.subplots(figsize = (25,8))
     cd = target_value[-20:]
-    # ax.plot(weekdays[-len(cd):], cd, label='Current Data')
+    ax.plot(weekdays[-len(cd):], cd, label='Current Data', color='black')
+    plt.plot(weekdays[-len(cd):], y_test[-20:], label='Y Test Vales', color='green')
 
-    # ax.plot([], [], label='ML Model: Mean Squared Error:  %.4f'%mse, alpha=0)
-    # ax.plot(future_weekdays, ml_forecasting[:DAYS], label='Next Month\'s Forecast')
-    # ax.plot([], [], label='', alpha=0)
+    ax.plot([], [], label='ML Model: Mean Squared Error:  %.4f'%mse, alpha=0)
+    ax.plot(future_weekdays, ml_forecasting[:DAYS], label='Next Month\'s Forecast', color='blue')
+    ax.plot([], [], label='', alpha=0)
 
     ax.plot([], [], label='ARIMA Model: Mean Squared Error on test set is {t} validation set is {v}'.format(t = int(mse_test), v= int(mse_val)), alpha=0)
-    plt.plot(weekdays[-len(cd):], y_test[-20:], label='Actual', color='red')
-    plt.fill_between(conf_int.index, conf_int.iloc[:,0], conf_int.iloc[:,1], color='pink')
+    # plt.fill_between(conf_int.index, conf_int.iloc[:,0], conf_int.iloc[:,1], color='pink')
     plt.plot(future_weekdays, arima__forecasting, label='forecast')
     ax.plot([], [], label='', alpha=0)
 
