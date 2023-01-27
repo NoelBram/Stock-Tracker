@@ -85,6 +85,7 @@ SCALER = MinMaxScaler()
 # Hyperparameters
 DROPOUT = 0.18
 RANDOM_STATE = 43
+TEST_SIZE = 0.80
 MODEL_TEST_SIZE = 23/258
 EPOCHS = 30
 LEARNING_RATE = 0.0015
@@ -176,12 +177,12 @@ class StockMLModelWithTraining(tf.keras.Model):
         self.y_val = y_val
         self.X_test = X_test
         self.y_test = y_test
-        # self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
-        # self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
+        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
+        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
 
     def compile_and_fit(self):   
-        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test)
-        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test)
+        # self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test)
+        # self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test)
         # Compile the model
         optimizer = optimizers.RMSprop()
 
@@ -191,32 +192,33 @@ class StockMLModelWithTraining(tf.keras.Model):
         self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=EPOCHS, verbose = 1)
 
 class StockMLModelWithRollingWindow:
-    def __init__(self, input_values, target_value, test_size, window_size):
+    def __init__(self, input_values, target_value, train_size, window_size):
         super(StockMLModelWithRollingWindow, self).__init__()  
         self.model = None
         self.input_values = input_values
         self.target_value = target_value
-        self.test_size = test_size
+        self.train_size = train_size
         self.window_size = window_size
     
     def split_data(self):
+         # Get the number of rows for the training set
+        train_rows = int(self.train_size * self.input_values.shape[0])
+        print(train_rows)
         # Get the number of rows for the test set
-        test_rows = int(self.test_size * self.input_values.shape[0])
+        test_rows = int(((1-self.train_size) * self.input_values.shape[0])*0.65)
+        print(test_rows) 
         # Get the number of rows for the validation set
-        val_rows = int(self.window_size * test_rows)
-        # Get the number of rows for the training set
-        train_rows = self.input_values.shape[0] - test_rows - val_rows
+        val_rows = self.input_values.shape[0] - test_rows - train_rows
+        print(val_rows)
+
         # Split the data into training, validation, and test sets
-        self.X_train = self.input_values[:train_rows]
-        self.y_train = self.target_value[:train_rows]
-        self.X_val = self.input_values[train_rows:train_rows+val_rows]
-        self.y_val = self.target_value[train_rows:train_rows+val_rows]
-        self.X_test = self.input_values[train_rows+val_rows:]
+        self.X_train = [self.input_values[i:i+self.window_size] for i in range(train_rows-self.window_size)]
+        self.y_train = self.target_value[self.window_size:train_rows]
+        self.X_val = [self.input_values[i:i+self.window_size] for i in range(train_rows-self.window_size, train_rows-self.window_size+val_rows-self.window_size)]
+        self.y_val = self.target_value[train_rows:train_rows+val_rows-self.window_size]
+        self.X_test = [self.input_values[i:i+self.window_size] for i in range(train_rows+val_rows-self.window_size, self.input_values.shape[0]-self.window_size)]
         self.y_test = self.target_value[train_rows+val_rows:]
         self.model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
-
-    def fit_and_evaluate(self):
-        self.model.compile_and_fit()
 
 if __name__ == '__main__':
 # @app.route('/forecast.png')
@@ -237,47 +239,40 @@ if __name__ == '__main__':
     print('The model input values for {stock} are as follows:\n{head}\n'.format(stock = STOCK_NAME, head = input_values.head()))
     print('The model target values for {stock} are as follows:\n{head}\nvariance: {var}\n{sum}\n'.format(stock = STOCK_NAME, head = target_value.head(), var = variance, sum = target_value.describe()))
 
-    # print('\nX_train:\n',X_train)
-    # print('\nX_val:\n',X_val)
-    # print('\ny_train:\n',y_train)
-    # print('\ny_val:\n',y_val)
-    # print('\nX_test:\n',X_test)
-    # print('\ny_test:\n',y_test)
-        
     # Initialize the machine learning model, then compile 
-    stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
-    stock_model.compile_and_fit()
-    ml_model = stock_model.model
-    ml_forecasting = ml_model.predict(X_val)
-    ml_forecasting = postprocess(ml_forecasting)
+    # stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
+    # stock_model.compile_and_fit()
+    # ml_model = stock_model.model
+    # ml_forecasting = ml_model.predict(X_val)
+    # ml_forecasting = postprocess(ml_forecasting)
     # print('The ML Model Forecast:\n', ml_forecasting)
 
     # Initialize the StockMLModelWithRollingWindow class with the data and test_size
-    # stock_model = StockMLModelWithRollingWindow(input_values, target_value,TEST_SIZE, WINDOW_SIZE)
-    # stock_model.split_data()
-    # stock_model.fit_and_evaluate()
-    # ml_model = stock_model.model.model
-    # ml_forecasting = ml_model.predict(stock_model.X_val)
+    stock_model = StockMLModelWithRollingWindow(input_values, target_value, TEST_SIZE, WINDOW_SIZE)
+    stock_model.split_data()
+    stock_model.model.compile_and_fit()
+    ml_model = stock_model.model
+    # ml_forecasting = ml_model.predict(pd.DataFrame(data = stock_model.X_val, columns=['Date', 'Open', 'High', 'Low', 'Volume']))
     # ml_forecasting = postprocess(ml_forecasting)
 
     # Instantiate the model with the training, validation, and test sets
-    arima_model = ARIMAModel(y_train, y_val, y_test)
-    arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
-    arima__forecasting, conf_int = arima_model.forecast(days=DAYS)
-    print("The ARIMA Model Forecast:\n", arima__forecasting)
+    # arima_model = ARIMAModel(y_train, y_val, y_test)
+    # arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
+    # arima__forecasting, conf_int = arima_model.forecast(days=DAYS)
+    # print("The ARIMA Model Forecast:\n", arima__forecasting)
 
     # Evaluate the model
-    mse = mean_squared_error(y_val, ml_forecasting)
-    result = ''
-    if mse < (variance*0.66):
-        result += 'Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
-    else:
-        result += 'Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
-    print(result)
+    # mse = mean_squared_error(y_val, ml_forecasting)
+    # result = ''
+    # if mse < (variance*0.66):
+    #     result += 'Success, the MSE: {mse} is smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
+    # else:
+    #     result += 'Fail, the MSE: {mse} is not much smaller than the Variance: {var}.'.format(mse= int(mse), var= int(variance))
+    # print(result)
 
     # Fit the model with p, d, and q values
-    # arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
     # mse_val, mse_test = arima_model.evaluate()
+    # print(mse_val, mse_test)
 
     # Plot the forecast and the true values
 #     fig, ax = plt.subplots(figsize = (25,8))
