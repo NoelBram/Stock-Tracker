@@ -75,8 +75,8 @@ def get_stock_quote_data(symbol, dateA, dateB):
         high.append(quote['h'])
         low.append(quote['l'])
         open.append(quote['o'])
-        volume.append(quote['v'])
-        timestamp.append(quote['v'])
+        volume.append((quote['v']-87976017.82703777)//194579)
+        timestamp.append((quote['t']//100000))
 
                         
     stock_quote_dict = {
