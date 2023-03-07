@@ -39,9 +39,9 @@ from scraper import *
 app = Flask(__name__)
 STOCK_NAME = 'AAPL'
 STOCKS = ['AAPL', 'NKE']
-YY = '2020'
-MM = '01'
-DD = '20'
+YY = '2022'
+MM = '06'
+DD = '16'
 
 IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 
@@ -153,7 +153,7 @@ class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
         self.dropout1 = Dropout(DROPOUT)
-        self.dense1 = Dense(units=32, activation='relu', input_dim = 5)
+        self.dense1 = Dense(units=32, activation='relu')
         self.dropout2 = Dropout(DROPOUT)
         self.dense2 = Dense(units=16, activation='relu')
         self.dropout3 = Dropout(DROPOUT)
