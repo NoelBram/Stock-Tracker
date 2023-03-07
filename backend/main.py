@@ -220,6 +220,14 @@ class StockMLModelWithRollingWindow:
         self.y_test = self.target_value[train_rows+val_rows:]
         self.model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
 
+def save_model(model):
+    # Get the current time
+    now = datetime.datetime.now()
+    now = now.strftime("%Y-%m-%d_%H:%M:%S")
+    folder = f'ml_model_{now}'
+    tf.saved_model.save(model, folder)
+    return folder
+
 if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
@@ -252,6 +260,9 @@ if __name__ == '__main__':
     stock_model.split_data()
     stock_model.model.compile_and_fit()
     ml_model = stock_model.model
+    # Save the model as a file
+    print(save_model(ml_model))
+
     # ml_forecasting = ml_model.predict(pd.DataFrame(data = stock_model.X_val, columns=['Date', 'Open', 'High', 'Low', 'Volume']))
     # ml_forecasting = postprocess(ml_forecasting)
 
