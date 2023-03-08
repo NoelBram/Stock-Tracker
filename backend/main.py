@@ -148,7 +148,7 @@ def postprocess(forecasts):
     forecasts = SCALER.inverse_transform(forecasts)
     return forecasts
 
-# ML Model using Liner Regresion
+# ML Model using Linear Regression
 class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
@@ -167,58 +167,67 @@ class StockMLModel(tf.keras.Model):
         x = self.dropout3(x)
         return self.dense3(x)
 
-class StockMLModelWithTraining(tf.keras.Model):
-    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
-        super(StockMLModelWithTraining, self).__init__()
-        self.model = StockMLModel()
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_val = X_val
-        self.y_val = y_val
-        self.X_test = X_test
-        self.y_test = y_test
-        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
-        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
-
-    def compile_and_fit(self):   
-        # self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test)
-        # self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test)
-        # Compile the model
-        optimizer = optimizers.RMSprop()
-
-        self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
-
-        # Fit the model to the training data
-        self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=EPOCHS, verbose = 1)
-
 class StockMLModelWithRollingWindow:
     def __init__(self, input_values, target_value, train_size, window_size):
-        super(StockMLModelWithRollingWindow, self).__init__()  
-        self.model = None
+        self.model = StockMLModel()
         self.input_values = input_values
         self.target_value = target_value
         self.train_size = train_size
         self.window_size = window_size
     
-    def split_data(self):
-         # Get the number of rows for the training set
-        train_rows = int(self.train_size * self.input_values.shape[0])
-        print(train_rows)
-        # Get the number of rows for the test set
-        test_rows = int(((1-self.train_size) * self.input_values.shape[0])*0.65)
-        print(test_rows) 
-        # Get the number of rows for the validation set
-        val_rows = self.input_values.shape[0] - test_rows - train_rows
-        print(val_rows)
+    def preprocess(self, X):
+        # Normalize the input features
+        scaler = MinMaxScaler()
+        return scaler.fit_transform(X)
 
-        # Split the data into training, validation, and test sets
-        self.X_train = [self.input_values[i:i+self.window_size] for i in range(train_rows-self.window_size)]
-        self.y_train = self.target_value[self.window_size:train_rows]
-        self.X_val = [self.input_values[i:i+self.window_size] for i in range(train_rows-self.window_size, train_rows-self.window_size+val_rows-self.window_size)]
-        self.y_val = self.target_value[train_rows:train_rows+val_rows-self.window_size]
-        self.X_test = [self.input_values[i:i+self.window_size] for i in range(train_rows+val_rows-self.window_size, self.input_values.shape[0]-self.window_size)]
-        self.y_test = self.target_value[train_rows+val_rows:]
-        self.model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
+    def split_data(self, X, y):
+        # Split the data into train, validation, and test sets
+        X_train = X[:self.train_size]
+        y_train = y[:self.train_size]
+        X_val = X[self.train_size:2*self.train_size]
+        y_val = y[self.train_size:2*self.train_size]
+        X_test = X[2*self.train_size:]
+        y_test = y[2*self.train_size:]
+
+        # Split the sequences using the rolling window approach
+        X_train, y_train = self.split_sequences(X_train, y_train)
+        X_val, y_val = self.split_sequences(X_val, y_val)
+        X_test, y_test = self.split_sequences(X_test, y_test)
+
+        return X_train, y_train, X_val, y_val, X_test, y_test
+
+    def split_sequences(self, X, y):
+        sequences = np.hstack((X, y.reshape(-1, 1)))
+        X_seq, y_seq = [], []
+        for i in range(len(sequences)):
+            end_ix = i + self.window_size
+            if end_ix > len(sequences):
+                break
+            seq_x, seq_y = sequences[i:end_ix, :-1], sequences[end_ix-1, -1]
+            X_seq.append(seq_x)
+            y_seq.append(seq_y)
+        return np.array(X_seq), np.array(y_seq)
+
+    def compile_and_fit(self, X_train, y_train, X_val, y_val):
+        # Compile the model
+        optimizer = optimizers.RMSprop()
+        self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
+
+        # Fit the model to the training data
+        self.model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, verbose=1)
+
+    def train_model(self):
+        # Split the data into input and target variables
+        X = self.input_values.values
+        y = self.target_value.values.reshape(-1, 1)
+
+        # Preprocess the input features
+        X = self.preprocess(X)
+
+        # Split the data into train, validation, and test sets using the rolling window approach
+        X_train, y_train, X_val, y_val, X_test, y_test = self.split_data(X, y)
+
+        # Compile
 
 def save_model(model):
     # Get the current time
@@ -232,7 +241,7 @@ if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
     # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
-    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']]
+    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
     # target_value = STOCK_DF[['Close', 'Low']]
     target_value = STOCK_DF[['Close']]
 
@@ -257,11 +266,12 @@ if __name__ == '__main__':
 
     # Initialize the StockMLModelWithRollingWindow class with the data and test_size
     stock_model = StockMLModelWithRollingWindow(input_values, target_value, TEST_SIZE, WINDOW_SIZE)
+    print('Splitting data with a sliding window:')
     stock_model.split_data()
     stock_model.model.compile_and_fit()
     ml_model = stock_model.model
     # Save the model as a file
-    print(save_model(ml_model))
+    # print(save_model(ml_model))
 
     # ml_forecasting = ml_model.predict(pd.DataFrame(data = stock_model.X_val, columns=['Date', 'Open', 'High', 'Low', 'Volume']))
     # ml_forecasting = postprocess(ml_forecasting)
