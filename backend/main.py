@@ -9,7 +9,7 @@ import sys
 import warnings
 if not sys.warnoptions:
     warnings.simplefilter('ignore')
-import numpy as np
+import numpy as np, array
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
@@ -22,6 +22,7 @@ import tensorflow as tf
 from tensorflow import keras, optimizers
 from keras import backend, layers, metrics, Input
 from keras.layers import Bidirectional, Dense, Dropout, LSTM, RNN 
+from keras.models import Sequential
 
 # Plotting imports
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -92,6 +93,7 @@ LEARNING_RATE = 0.0015
 REGL1 = 0.01
 REGL2 = 0.01
 WINDOW_SIZE = 7
+N_FEATURES = 5
 WEIGHT = 1.1
 
 ARIMA_P = 2
@@ -148,12 +150,13 @@ def postprocess(forecasts):
     forecasts = SCALER.inverse_transform(forecasts)
     return forecasts
 
-# ML Model using Linear Regression
+# ML Model using Liner Regresion
 class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
         self.dropout1 = Dropout(DROPOUT)
-        self.dense1 = Dense(units=32, activation='relu')
+        self.lstm = LSTM(100, activation='relu', input_shape=(WINDOW_SIZE, N_FEATURES))
+        self.dense1 = Dense(units=32, activation='relu', input_dim = 5)
         self.dropout2 = Dropout(DROPOUT)
         self.dense2 = Dense(units=16, activation='relu')
         self.dropout3 = Dropout(DROPOUT)
@@ -161,73 +164,37 @@ class StockMLModel(tf.keras.Model):
 
     def call(self, inputs):
         x = self.dropout1(inputs)
+        x = self.lstm(x)
         x = self.dense1(x)
         x = self.dropout2(x)
         x = self.dense2(x)
         x = self.dropout3(x)
         return self.dense3(x)
 
-class StockMLModelWithRollingWindow:
-    def __init__(self, input_values, target_value, train_size, window_size):
+class StockMLModelWithTraining(tf.keras.Model):
+    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
+        super(StockMLModelWithTraining, self).__init__()
         self.model = StockMLModel()
-        self.input_values = input_values
-        self.target_value = target_value
-        self.train_size = train_size
-        self.window_size = window_size
-    
-    def preprocess(self, X):
-        # Normalize the input features
-        scaler = MinMaxScaler()
-        return scaler.fit_transform(X)
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_val = X_val
+        self.y_val = y_val
+        self.X_test = X_test
+        self.y_test = y_test
+        # self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
+        # self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
 
-    def split_data(self, X, y):
-        # Split the data into train, validation, and test sets
-        X_train = X[:self.train_size]
-        y_train = y[:self.train_size]
-        X_val = X[self.train_size:2*self.train_size]
-        y_val = y[self.train_size:2*self.train_size]
-        X_test = X[2*self.train_size:]
-        y_test = y[2*self.train_size:]
-
-        # Split the sequences using the rolling window approach
-        X_train, y_train = self.split_sequences(X_train, y_train)
-        X_val, y_val = self.split_sequences(X_val, y_val)
-        X_test, y_test = self.split_sequences(X_test, y_test)
-
-        return X_train, y_train, X_val, y_val, X_test, y_test
-
-    def split_sequences(self, X, y):
-        sequences = np.hstack((X, y.reshape(-1, 1)))
-        X_seq, y_seq = [], []
-        for i in range(len(sequences)):
-            end_ix = i + self.window_size
-            if end_ix > len(sequences):
-                break
-            seq_x, seq_y = sequences[i:end_ix, :-1], sequences[end_ix-1, -1]
-            X_seq.append(seq_x)
-            y_seq.append(seq_y)
-        return np.array(X_seq), np.array(y_seq)
-
-    def compile_and_fit(self, X_train, y_train, X_val, y_val):
+    def compile_and_fit(self):   
+        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test)
+        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test)
         # Compile the model
         optimizer = optimizers.RMSprop()
+
         self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
 
         # Fit the model to the training data
-        self.model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, verbose=1)
+        self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=EPOCHS, verbose = 0)
 
-    def train_model(self):
-        # Split the data into input and target variables
-        X = self.input_values.values
-        y = self.target_value.values.reshape(-1, 1)
-
-        # Preprocess the input features
-        X = self.preprocess(X)
-
-        # Split the data into train, validation, and test sets using the rolling window approach
-        X_train, y_train, X_val, y_val, X_test, y_test = self.split_data(X, y)
-
-        # Compile
 
 def save_model(model):
     # Get the current time
@@ -237,41 +204,89 @@ def save_model(model):
     tf.saved_model.save(model, folder)
     return folder
 
+def split_sequences(df, n_steps):
+    X, y = [], []
+    for i in range(len(df)):
+        # find the end of this pattern
+        end_ix = i + n_steps
+        # check if we are beyond the dataset
+        if end_ix > len(df)-1:
+            break
+        # gather input and output parts of the pattern
+        seq_x, seq_y = df.iloc[i:end_ix, :-1].values, df.iloc[end_ix, -1]
+        X.append(seq_x)
+        y.append(seq_y)
+    return np.array(X), np.array(y)
+
 if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
     # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
-    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
+    last_row = STOCK_DF.iloc[-1]
+    STOCK_DF = STOCK_DF.drop(STOCK_DF.index[-1])
+    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume', 'Close']]
     # target_value = STOCK_DF[['Close', 'Low']]
-    target_value = STOCK_DF[['Close']]
+    # target_value = STOCK_DF[['Close']]
 
-    # Split the data into training, validation, and test sets
-    X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)   # 90-iv, 10-iv, 90-tv, 10-tv
-    # X_train.iloc[:, -1] = X_train.iloc[:, -1] * WEIGHT
-    X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)               # 81-iv, 9-iv, 81-tv, 9-tv
+    # input_values = STOCK_DF[['Close']]
+    # # target_value = STOCK_DF[['Close', 'Low']]
+    # target_value = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']]
+
+    # # Split the data into training, validation, and test sets
+    # X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)   # 90-iv, 10-iv, 90-tv, 10-tv
+    # # X_train.iloc[:, -1] = X_train.iloc[:, -1] * WEIGHT
+    # X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)               # 81-iv, 9-iv, 81-tv, 9-tv
     
     # Output the input_values and target_value info and calculations
-    variance = np.var(target_value)
-    # variance = np.var(target_value['Close'])
-    print('The model input values for {stock} are as follows:\n{head}\n'.format(stock = STOCK_NAME, head = input_values.head()))
-    print('The model target values for {stock} are as follows:\n{head}\nvariance: {var}\n{sum}\n'.format(stock = STOCK_NAME, head = target_value.head(), var = variance, sum = target_value.describe()))
+    # variance = np.var(target_value)
+    # # variance = np.var(target_value['Close'])
+    # print('The model input values for {stock} are as follows:\n{head}\n'.format(stock = STOCK_NAME, head = input_values.head()))
+    # print('The model target values for {stock} are as follows:\n{head}\nvariance: {var}\n{sum}\n'.format(stock = STOCK_NAME, head = target_value.head(), var = variance, sum = target_value.describe()))
 
+    # print('\nX_train:\n',X_train)
+    # print('\nX_val:\n',X_val)
+    # print('\ny_train:\n',y_train)
+    # print('\ny_val:\n',y_val)
+    # print('\nX_test:\n',X_test)
+    # print('\ny_test:\n',y_test)
+        
     # Initialize the machine learning model, then compile 
+    
+    # convert into input/output
+    n_steps = 6
+    X, y = split_sequences(input_values, n_steps)
+    n_features = X.shape[2]
+    # print(X.shape, y.shape)
+
+    # define model
+    model = Sequential()
+    model.add(LSTM(100, activation='relu', return_sequences=True, input_shape=(n_steps, n_features)))
+    model.add(LSTM(100, activation='relu'))
+    model.add(Dense(n_features))
+    model.compile(optimizer='adam', loss='mse')
+
+    # fit model
+    model.fit(X, y, epochs=400, verbose=0)
+    # demonstrate prediction
+    yhat = model.predict(last_row, verbose=0)
+    print(yhat)
     # stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
     # stock_model.compile_and_fit()
     # ml_model = stock_model.model
     # ml_forecasting = ml_model.predict(X_val)
     # ml_forecasting = postprocess(ml_forecasting)
-    # print('The ML Model Forecast:\n', ml_forecasting)
-
-    # Initialize the StockMLModelWithRollingWindow class with the data and test_size
-    stock_model = StockMLModelWithRollingWindow(input_values, target_value, TEST_SIZE, WINDOW_SIZE)
-    print('Splitting data with a sliding window:')
-    stock_model.split_data()
-    stock_model.model.compile_and_fit()
-    ml_model = stock_model.model
     # Save the model as a file
     # print(save_model(ml_model))
+
+
+    # Instantiate the model with the training, validation, and test sets
+    # arima_model = ARIMAModel(y_train, y_val, y_test)
+    # arima_model.fit(ARIMA_P, ARIMA_D, ARIMA_Q)
+    # arima__forecasting, conf_int = arima_model.forecast(days=DAYS)
+    # print("The ARIMA Model Forecast:\n", arima__forecasting)
+
+
+    # demonstrate prediction
 
     # ml_forecasting = ml_model.predict(pd.DataFrame(data = stock_model.X_val, columns=['Date', 'Open', 'High', 'Low', 'Volume']))
     # ml_forecasting = postprocess(ml_forecasting)
