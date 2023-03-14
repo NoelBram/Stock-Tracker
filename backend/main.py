@@ -94,7 +94,7 @@ REGL1 = 0.01
 REGL2 = 0.01
 WINDOW_SIZE = 7
 N_FEATURES = 5
-WEIGHT = 1.1
+BATCH_SIZE = 14
 
 ARIMA_P = 2
 ARIMA_D = 1
@@ -150,13 +150,13 @@ def postprocess(forecasts):
     forecasts = SCALER.inverse_transform(forecasts)
     return forecasts
 
-# ML Model using Liner Regresion
+# ML Model using Liner Regression
 class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
         self.dropout1 = Dropout(DROPOUT)
-        self.lstm = LSTM(100, activation='relu', input_shape=(WINDOW_SIZE, N_FEATURES))
-        self.dense1 = Dense(units=32, activation='relu', input_dim = 5)
+        self.lstm = LSTM(units=64, activation='relu', input_shape=(WINDOW_SIZE, N_FEATURES))
+        self.dense1 = Dense(units=32, activation='relu')
         self.dropout2 = Dropout(DROPOUT)
         self.dense2 = Dense(units=16, activation='relu')
         self.dropout3 = Dropout(DROPOUT)
@@ -165,7 +165,7 @@ class StockMLModel(tf.keras.Model):
     def call(self, inputs):
         x = self.dropout1(inputs)
         x = self.lstm(x)
-        x = self.dense1(x)
+        x = self.dense1(x[:, -1, :]) # extract last output of LSTM sequence
         x = self.dropout2(x)
         x = self.dense2(x)
         x = self.dropout3(x)
@@ -222,21 +222,61 @@ if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
     # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
-    last_row = STOCK_DF.iloc[-1]
-    STOCK_DF = STOCK_DF.drop(STOCK_DF.index[-1])
-    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume', 'Close']]
-    # target_value = STOCK_DF[['Close', 'Low']]
-    # target_value = STOCK_DF[['Close']]
+    # Split input data into X and y
+    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']].values
+    y = STOCK_DF['Close'].values  # replace 'Target_Column' with the name of the target column
 
-    # input_values = STOCK_DF[['Close']]
-    # # target_value = STOCK_DF[['Close', 'Low']]
-    # target_value = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']]
+    # Prepare input sequences
+    n_steps = 6
+    X = []
+    for i in range(n_steps, len(input_values)):
+        X.append(input_values[i-n_steps:i])
+    y = y[n_steps:]  # only keep target values starting from the nth step
+    X = np.array(X)
 
-    # # Split the data into training, validation, and test sets
-    # X_train, X_test, y_train, y_test = train_test_split(input_values, target_value, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)   # 90-iv, 10-iv, 90-tv, 10-tv
-    # # X_train.iloc[:, -1] = X_train.iloc[:, -1] * WEIGHT
-    # X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=MODEL_TEST_SIZE, random_state=RANDOM_STATE)               # 81-iv, 9-iv, 81-tv, 9-tv
-    
+    # Define model
+    n_features = X.shape[2]
+    model = Sequential()
+    model.add(LSTM(100, activation='relu', return_sequences=True, input_shape=(n_steps, n_features)))
+    model.add(LSTM(100, activation='relu'))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mse')
+
+    # Fit model
+    model.fit(X, y, epochs=400, verbose=0)
+
+    # Predict next 30 values
+    # n_predictions = 30
+    # last_row = input_values[-n_steps:]
+    # predictions = []
+    # for i in range(n_predictions):
+    #     # Predict next value based on last_row
+    #     yhat = model.predict(np.array([last_row]))
+    #     predictions.append(yhat[0, 0])  # Append predicted value to list of predictions
+        
+    #     # Update last_row with predicted value
+    #     last_row = np.append(last_row[1:], yhat, axis=0)
+    #     last_row[-1][-1] = yhat[0, 0]  # Replace last element of last row with predicted value
+        
+    #     # Add predicted value to input and target data
+    #     input_values = np.concatenate([input_values, np.array([last_row[-1]])], axis=0)
+    #     y = np.append(y, yhat[0, 0])
+    #     X = []
+    #     for i in range(n_steps, len(input_values)):
+    #         X.append(input_values[i-n_steps:i])
+    #     X = np.array(X)
+        
+    #     # Fit model with updated data
+    #     model.fit(X, y, epochs=1, verbose=0)
+
+    # print(predictions)
+
+    # Predict next value
+    # Demonstrate prediction
+    last_row = input_values[-n_steps:]
+    yhat = model.predict(np.array([last_row]))
+    print(yhat)
+
     # Output the input_values and target_value info and calculations
     # variance = np.var(target_value)
     # # variance = np.var(target_value['Close'])
@@ -252,29 +292,31 @@ if __name__ == '__main__':
         
     # Initialize the machine learning model, then compile 
     
-    # convert into input/output
-    n_steps = 6
-    X, y = split_sequences(input_values, n_steps)
-    n_features = X.shape[2]
-    # print(X.shape, y.shape)
+    # # convert into input/output
+    # n_steps = 5
+    # X, y = split_sequences(input_values, n_steps)
+    # n_features = X.shape[2]
+    # n_samples = X.shape[0]
+    # print(X.shape, y.shape, n_features, n_samples)
 
-    # define model
-    model = Sequential()
-    model.add(LSTM(100, activation='relu', return_sequences=True, input_shape=(n_steps, n_features)))
-    model.add(LSTM(100, activation='relu'))
-    model.add(Dense(n_features))
-    model.compile(optimizer='adam', loss='mse')
+    # model = StockMLModel()
+    # X_train, X_val, X_test = preprocess(X_train, X_val, X_test)
+    # y_train, y_val, y_test = preprocess(y_train, y_val, y_test)
+    # # Compile the model
+    # optimizer = optimizers.RMSprop()
 
-    # fit model
-    model.fit(X, y, epochs=400, verbose=0)
-    # demonstrate prediction
-    yhat = model.predict(last_row, verbose=0)
-    print(yhat)
-    # stock_model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
-    # stock_model.compile_and_fit()
-    # ml_model = stock_model.model
-    # ml_forecasting = ml_model.predict(X_val)
-    # ml_forecasting = postprocess(ml_forecasting)
+    # model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
+
+    # # Fit the model to the training data
+    # model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, verbose = 0)
+
+    # # demonstrate prediction
+    # # Convert NumPy array to tensor
+    # last_row_tensor = tf.convert_to_tensor(last_row, dtype=tf.float32)
+
+    # yhat = model.predict(last_row_tensor, verbose=0)
+    # print(yhat)
+
     # Save the model as a file
     # print(save_model(ml_model))
 
