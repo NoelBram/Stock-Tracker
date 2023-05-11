@@ -92,8 +92,8 @@ EPOCHS = 30
 LEARNING_RATE = 0.0015
 REGL1 = 0.01
 REGL2 = 0.01
-WINDOW_SIZE = 7
-N_FEATURES = 5
+WINDOW_SIZE = 0
+N_FEATURES = 0
 BATCH_SIZE = 14
 
 ARIMA_P = 2
@@ -181,12 +181,12 @@ class StockMLModelWithTraining(tf.keras.Model):
         self.y_val = y_val
         self.X_test = X_test
         self.y_test = y_test
-        # self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
-        # self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
 
-    def compile_and_fit(self):   
-        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test)
-        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test)
+    def compile_and_fit_val(self):   
+        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
+        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
+
+
         # Compile the model
         optimizer = optimizers.RMSprop()
 
@@ -195,6 +195,20 @@ class StockMLModelWithTraining(tf.keras.Model):
         # Fit the model to the training data
         self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=EPOCHS, verbose = 0)
 
+    # def compile_and_fit_test(self):
+    #     # Compile the model
+    #     optimizer = optimizers.RMSprop()
+    #     self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
+
+    #     # Fit the model to the training data
+    #     self.model.fit(self.X_train, self.y_train, epochs=EPOCHS, verbose=0)
+
+    #     # Evaluate the model on the test data
+    #     test_loss, test_acc, test_mse = self.model.evaluate(self.X_test, self.y_test, verbose=0)
+
+    #     print('Test loss:', test_loss)
+    #     print('Test accuracy:', test_acc)
+    #     print('Test MSE:', test_mse)
 
 def save_model(model):
     # Get the current time
@@ -222,32 +236,79 @@ if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
     # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
+
     # Split input data into X and y
     input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']].values
     y = STOCK_DF['Close'].values  # replace 'Target_Column' with the name of the target column
 
-    # Prepare input sequences
-    n_steps = 6
-    X = []
-    for i in range(n_steps, len(input_values)):
-        X.append(input_values[i-n_steps:i])
-    y = y[n_steps:]  # only keep target values starting from the nth step
-    X = np.array(X)
+    # Define the percentages for each set
+    train_pct = 0.7
+    val_pct = 0.1
+    test_pct = 0.1
+
+    # Get the number of rows for each set
+    train_rows = int(train_pct * len(input_values))
+    val_rows = int(val_pct * len(input_values))
+    test_rows = int(test_pct * len(input_values))
+
+    # Split the data into training, validation, and test sets
+    X_train = input_values[:train_rows]
+    y_train = y[:train_rows]
+    X_val = input_values[train_rows:train_rows+val_rows]
+    y_val = y[train_rows:train_rows+val_rows]
+    X_test = input_values[train_rows+val_rows:]
+    y_test = y[train_rows+val_rows:]
+# ===================================≠≠≠≠≠≠≠≠≠≠≠========================
+    # Verify the shapes of the datasets
+    # print("Training set shape: ", X_train.shape, y_train.shape)
+    # print("Validation set shape: ", X_val.shape, y_val.shape)
+    # print("Test set shape: ", X_test.shape, y_test.shape)
+
+    # print(y_train)
+# ===================================≠≠≠≠≠≠≠≠≠≠≠========================
+    # # Prepare input sequences
+    # WINDOW_SIZE = 6
+    # X = []
+    # for i in range(WINDOW_SIZE, len(input_values)):
+    #     X.append(input_values[i-WINDOW_SIZE:i])
+    # y = y[WINDOW_SIZE:]  # only keep target values starting from the nth step
+    # X = np.array(X)
 
     # Define model
-    n_features = X.shape[2]
-    model = Sequential()
-    model.add(LSTM(100, activation='relu', return_sequences=True, input_shape=(n_steps, n_features)))
-    model.add(LSTM(100, activation='relu'))
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mse')
+    model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
+    model.compile_and_fit_val()
+    model = model.model
+
+    print(model.summary)
+
+    # N_FEATURES = X.shape[2]
+    # # Split the data into train, validation, and test sets
+    # train_size = 0.7
+    # val_size = 0.1
+
+    # num_rows = data.shape[0]
+    # train_end = int(train_size * num_rows)
+    # val_end = train_end + int(val_size * num_rows)
+
+    # # Train set
+    # X_train = data.iloc[:train_end, :-1].values
+    # y_train = data.iloc[:train_end, -1].values
+
+    # # Validation set
+    # X_val = data.iloc[train_end:val_end, :-1].values
+    # y_val = data.iloc[train_end:val_end, -1].values
+
+    # # Test set
+    # X_test = data.iloc[val_end:, :-1].values
+    # y_test = data.iloc[val_end:, -1].values
+    # model = StockMLModelWithTraining()
+    # model.compile(optimizer='adam', loss='mse')
 
     # Fit model
-    model.fit(X, y, epochs=400, verbose=0)
 
     # Predict next 30 values
     # n_predictions = 30
-    # last_row = input_values[-n_steps:]
+    # last_row = input_values[-WINDOW_SIZE:]
     # predictions = []
     # for i in range(n_predictions):
     #     # Predict next value based on last_row
@@ -262,8 +323,8 @@ if __name__ == '__main__':
     #     input_values = np.concatenate([input_values, np.array([last_row[-1]])], axis=0)
     #     y = np.append(y, yhat[0, 0])
     #     X = []
-    #     for i in range(n_steps, len(input_values)):
-    #         X.append(input_values[i-n_steps:i])
+    #     for i in range(WINDOW_SIZE, len(input_values)):
+    #         X.append(input_values[i-WINDOW_SIZE:i])
     #     X = np.array(X)
         
     #     # Fit model with updated data
@@ -273,9 +334,9 @@ if __name__ == '__main__':
 
     # Predict next value
     # Demonstrate prediction
-    last_row = input_values[-n_steps:]
-    yhat = model.predict(np.array([last_row]))
-    print(yhat)
+    # last_row = input_values[-n_steps:]
+    # yhat = model.predict(np.array([last_row]))
+    # print(yhat)
 
     # Output the input_values and target_value info and calculations
     # variance = np.var(target_value)
