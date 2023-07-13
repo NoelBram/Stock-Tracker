@@ -163,3 +163,22 @@ table tbody tr.striped .symbol-link:nth-child(odd) {
 table tbody tr .symbol-link:nth-child(even) {
   background-color: #cbb7f9 !important;
 }
+
+.card {
+  width: 100%;   
+  background-color: var(--second-bg-color);
+  border-radius: 10px;
+  box-shadow:  10px 10px 10px #151d28;
+}
+
+.chart-canvas {
+  margin: 20px;
+  position: relative;
+  min-height: 250px;
+}
+
+.chart-options {
+  position: absolute;
+  right: 30px;
+  top: 14px;
+}

@@ -36,6 +36,9 @@ from datetime import date, datetime, timedelta
 from threading import Lock
 import math
 from scraper import *
+import seaborn as sns
+import matplotlib.pyplot as plt
+
 
 app = Flask(__name__)
 STOCK_NAME = 'AAPL'
@@ -75,13 +78,14 @@ DAYS = 30
 start_date = datetime.datetime(int(YY), int(MM), int(DD))
 end_date = datetime.datetime.strptime(TODAY+' 00:00:00', "%Y-%m-%d %H:%M:%S")
 # Generate a range of weekdays (Monday through Friday)
-weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR),dtstart=start_date, until=end_date))
-weekdays = [(datetime.datetime.strptime(weekday.strftime("%Y-%m-%d"), "%Y-%m-%d")).timestamp() for weekday in weekdays]
+WEEKDAYS = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR),dtstart=start_date, until=end_date))
+WEEKDAYS = [(datetime.datetime.strptime(weekday.strftime("%Y-%m-%d"), "%Y-%m-%d")).timestamp() for weekday in WEEKDAYS]
 future_weekdays = list(rrule(DAILY, byweekday=(MO, TU, WE, TH, FR), count=DAYS, dtstart=end_date))
 future_weekdays = [weekday.timestamp() for weekday in future_weekdays]
 # print('Last Week Days: ', weekdays[-10:])
 # SCALER = StandardScaler()
 SCALER = MinMaxScaler()
+Y_VALUE = pd.DataFrame()
 
 # Hyperparameters
 DROPOUT = 0.18
@@ -155,7 +159,7 @@ class StockMLModel(tf.keras.Model):
     def __init__(self):
         super(StockMLModel, self).__init__()
         self.dropout1 = Dropout(DROPOUT)
-        self.lstm = LSTM(units=64, activation='relu', input_shape=(WINDOW_SIZE, N_FEATURES))
+        self.lstm = LSTM(units=64,return_sequences=True, return_state=True, activation='relu')
         self.dense1 = Dense(units=32, activation='relu')
         self.dropout2 = Dropout(DROPOUT)
         self.dense2 = Dense(units=16, activation='relu')
@@ -164,7 +168,7 @@ class StockMLModel(tf.keras.Model):
 
     def call(self, inputs):
         x = self.dropout1(inputs)
-        x = self.lstm(x)
+        # x = self.lstm(x)
         x = self.dense1(x[:, -1, :]) # extract last output of LSTM sequence
         x = self.dropout2(x)
         x = self.dense2(x)
@@ -172,29 +176,67 @@ class StockMLModel(tf.keras.Model):
         return self.dense3(x)
 
 class StockMLModelWithTraining(tf.keras.Model):
-    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
+    def __init__(self, input_values, y, train_ratio, val_ratio):
         super(StockMLModelWithTraining, self).__init__()
+        self.input_values = input_values
+        self.y = y
+        self.tr = train_ratio
+        self.vr = val_ratio
         self.model = StockMLModel()
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_val = X_val
-        self.y_val = y_val
-        self.X_test = X_test
-        self.y_test = y_test
+        
+    def compile_and_fit(self):
+        # Get the number of rows for each set
+        train_rows = int(train_pct * len(self.input_values))
+        val_rows = int(val_pct * len(self.input_values))
 
-    def compile_and_fit_val(self):   
-        self.X_train, self.X_val, self.X_test = preprocess(self.X_train, self.X_val, self.X_test) # Normalize the input features and target variable 
-        self.y_train, self.y_val, self.y_test = preprocess(self.y_train, self.y_val, self.y_test) # Normalize the input features and target variable 
+        # Split the data into training, validation, and test sets
+        X_train = self.input_values[:train_rows]
+        y_train = self.y[:train_rows]
+        X_val = self.input_values[train_rows:train_rows+val_rows]
+        y_val = self.y[train_rows:train_rows+val_rows]
+        X_test = self.input_values[train_rows+val_rows:]
+        y_test = self.y[train_rows+val_rows:]
 
+        # Verify the shapes of the datasets
+        print("Training set shape: ", X_train.shape, y_train.shape)
+        print("Validation set shape: ", X_val.shape, y_val.shape)
+        print("Test set shape: ", X_test.shape, y_test.shape)
+        # print(y_train)
 
-        # Compile the model
-        optimizer = optimizers.RMSprop()
+        # # Prepare input sequences
+        # WINDOW_SIZE = 6
+        # X = []
+        # for i in range(WINDOW_SIZE, len(self.input_values)):
+        #     X.append(self.input_values[i-WINDOW_SIZE:i])
+        # self.y = self.y[WINDOW_SIZE:]  # only keep target values starting from the nth step
+        # N_FEATURES = np.array(X)
 
-        self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
+        # n = N_FEATURES.shape[0]
+        # train_size = int(n * self.tr)
+        # val_size = int(n * self.vr)
 
-        # Fit the model to the training data
-        self.model.fit(self.X_train, self.y_train, validation_data=(self.X_val, self.y_val), epochs=EPOCHS, verbose = 0)
+        # X_train = self.input_values[:train_size]
+        # y_train = self.y[:train_size]
+        # X_val = self.input_values[train_size:train_size + val_size]
+        # y_val = self.y[train_size:train_size + val_size]
+        # X_test = self.input_values[train_size + val_size:]
+        # y_test = self.y[train_size + val_size:]
 
+        # # return X_train, y_train, X_val, y_val, X_test, y_test
+
+        # X_train, X_val, X_test = preprocess(X_train, X_val, X_test) # Normalize the input features and target variable 
+        # y_train, y_val, y_test = preprocess(y_train.reshape(-1, 1), y_val.reshape(-1, 1), y_test.reshape(-1, 1)) # Normalize the target variable 
+       
+        # # Compile the model
+        # optimizer = optimizers.RMSprop()
+
+        # self.model.compile(optimizer=optimizer, loss='mean_squared_error', metrics=['accuracy', 'mse'])
+
+        # # Fit the model to the training data
+        # self.model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=EPOCHS, verbose = 0)
+        # # self.model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=EPOCHS, verbose = 0)
+
+        
     # def compile_and_fit_test(self):
     #     # Compile the model
     #     optimizer = optimizers.RMSprop()
@@ -232,54 +274,24 @@ def split_sequences(df, n_steps):
         y.append(seq_y)
     return np.array(X), np.array(y)
 
-if __name__ == '__main__':
 # @app.route('/forecast.png')
 # def get_forecast():
-    # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
+#     # Extract the input features and target variable with GCD of rows to WINDOW_SIZE, hence '.iloc[5:]'.
 
-    # Split input data into X and y
-    input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']].values
-    y = STOCK_DF['Close'].values  # replace 'Target_Column' with the name of the target column
+#     # Split input data into X and y
+#     input_values = STOCK_DF[['Date', 'Open', 'High', 'Low', 'Volume']].values
+#     Y_VALUE = STOCK_DF['Close'].values  # replace 'Target_Column' with the name of the target column
 
-    # Define the percentages for each set
-    train_pct = 0.7
-    val_pct = 0.1
-    test_pct = 0.1
+#     # Define the percentages for each set
+#     train_pct = 0.7
+#     val_pct = 0.2
+ 
+#     # Define model
+#     model = StockMLModelWithTraining(input_values, Y_VALUE, train_pct, val_pct)
+#     model.compile_and_fit()
+#     model = model.model
 
-    # Get the number of rows for each set
-    train_rows = int(train_pct * len(input_values))
-    val_rows = int(val_pct * len(input_values))
-    test_rows = int(test_pct * len(input_values))
-
-    # Split the data into training, validation, and test sets
-    X_train = input_values[:train_rows]
-    y_train = y[:train_rows]
-    X_val = input_values[train_rows:train_rows+val_rows]
-    y_val = y[train_rows:train_rows+val_rows]
-    X_test = input_values[train_rows+val_rows:]
-    y_test = y[train_rows+val_rows:]
-# ===================================≠≠≠≠≠≠≠≠≠≠≠========================
-    # Verify the shapes of the datasets
-    # print("Training set shape: ", X_train.shape, y_train.shape)
-    # print("Validation set shape: ", X_val.shape, y_val.shape)
-    # print("Test set shape: ", X_test.shape, y_test.shape)
-
-    # print(y_train)
-# ===================================≠≠≠≠≠≠≠≠≠≠≠========================
-    # # Prepare input sequences
-    # WINDOW_SIZE = 6
-    # X = []
-    # for i in range(WINDOW_SIZE, len(input_values)):
-    #     X.append(input_values[i-WINDOW_SIZE:i])
-    # y = y[WINDOW_SIZE:]  # only keep target values starting from the nth step
-    # X = np.array(X)
-
-    # Define model
-    model = StockMLModelWithTraining(X_train, y_train, X_val, y_val, X_test, y_test)
-    model.compile_and_fit_val()
-    model = model.model
-
-    print(model.summary)
+    # print(model.summary)
 
     # N_FEATURES = X.shape[2]
     # # Split the data into train, validation, and test sets
@@ -457,15 +469,44 @@ if __name__ == '__main__':
 
 # thread = None
 # thread_lock = Lock()
+@app.route('/')
+@app.route('/results', methods=("POST", "GET"))
+def results():
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
+    # return render_template('results.html', title='IEX Trading')
 
-# @app.route('/')
-# @app.route('/results', methods=("POST", "GET"))
-# def index():
-#     global thread
-#     return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
 
-# if __name__ == '__main__':
-#     app.run(host='0.0.0.0', port=80, debug = True)
+@app.route('/plot.png')
+def plot_png():
+    fig = create_figure(STOCK_DF)
+    output = io.BytesIO()
+    fig.savefig(output, format='png')
+    output.seek(0)
+    return Response(output.getvalue(), mimetype='image/png')
+
+def create_figure(df):
+    plt.figure(figsize=(6, 4))
+    sns.set_theme(style="whitegrid")
+
+    x = df['Date']
+    y = df['Close']
+
+    sns.lineplot(x=x, y=y, color="#917ed5")
+
+    plt.ylabel('Stock Price (USD)', fontsize=12)
+    plt.xlabel('Date (YYYY-MM-DD)', fontsize=12)
+
+    return plt.gcf()
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80, debug = True)
+    # y_value_json = STOCK_DF['Close'].values.tolist()
+    # x_value_json = STOCK_DF['Date'].values.tolist()
+    # print(len(y_value_json))
+    # print(len(x_value_json))
+
+    
+
 # 79468220312269963264
 # 8325919859938426880
 # 5887356508577938276352 -> 7
