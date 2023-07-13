@@ -11,6 +11,7 @@
       <th>Low</th>
       <th>Close</th>
       <th>Volume</th>
+      <th>Returns</th>
     </tr>
   </thead>
   <tbody>
@@ -23,9 +24,10 @@
           <td>{{ row[4] }}</td>
           <td>{{ row[5] }}</td>
           <td>{{ row[6] }}</td>
+          <td>{{ row[7] }}</td>
       </tr>
       <tr>
-        <td colspan="7" class="card-output">
+        <td colspan="8" class="card-output">
           <div class="collapse" id="{{ row[0] }}">
             <div class="card card-body">
               <img src="/plot.png" alt="stock_forecast_chart" height="50%" width="50%">
@@ -51,6 +53,7 @@
         {data: 'Low'},
         {data: 'Close'},
         {data: 'Volume'},
+        {data: 'Returns'},
       ],
     });
   });

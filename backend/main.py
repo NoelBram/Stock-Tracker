@@ -475,7 +475,6 @@ def results():
     return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
     # return render_template('results.html', title='IEX Trading')
 
-
 @app.route('/plot.png')
 def plot_png():
     fig = create_figure(STOCK_DF)

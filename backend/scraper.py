@@ -55,6 +55,7 @@ def get_stock_quote_data(symbol, dateA, dateB):
     symbols = []
     timestamp = []
     volume = []     
+    returns = []
 
     # Extracting only the relevant bits of data from the json object 
     ticker = get_stock_quote(symbol, dateA, dateB)
@@ -77,7 +78,7 @@ def get_stock_quote_data(symbol, dateA, dateB):
         open.append(quote['o'])
         volume.append((quote['v']-87976017.82703777)//194579)
         timestamp.append((quote['t']//100000))
-
+        returns.append(round(((quote['c'] - quote['o']) / quote['o']) * 100, 3)) # This formula calculates the percentage change between the "open" and "close" prices and expresses it as a percentage return. It represents the gain or loss as a proportion of the opening price.
                         
     stock_quote_dict = {
         'Close' : close,
@@ -87,6 +88,7 @@ def get_stock_quote_data(symbol, dateA, dateB):
         'Date' : timestamp,
         'Volume' : volume,
         'Symbol' : symbols,
+        'Returns' : returns,
     }
 
     return stock_quote_dict
@@ -147,7 +149,7 @@ def readSqliteTable(title, symbol, date):
         cursor.execute(sqlite_select_query)
         record = cursor.fetchall()
         cursor.close()
-        return pd.DataFrame(data = record, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+        return pd.DataFrame(data = record, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Returns'])
     except sqlite3.Error as error:
         print("R: Failed to read data from sqlite table", error)
     finally:
@@ -174,7 +176,7 @@ def updateSqliteTable(df, title, symbol):
 
 def get_stock_df(title, symbol, dateA, dateB):
     stock_quotes = get_stock_quote_data(symbol, dateA, dateB)
-    stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume'])
+    stock_quotes_df = pd.DataFrame(data = stock_quotes, columns = ['Symbol', 'Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Returns'])
 
     # Validate
     if check_if_valid_data(stock_quotes_df):
