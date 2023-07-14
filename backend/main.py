@@ -41,13 +41,10 @@ import matplotlib.pyplot as plt
 
 
 app = Flask(__name__)
-STOCK_NAME = 'AAPL'
 STOCKS = ['AAPL', 'NKE']
 YY = '2022'
 MM = '06'
 DD = '16'
-
-IMAGE_URL = '/backend/static/assets/img/charts/{stock_name}.png'.format(stock_name = STOCK_NAME.lower())
 
 # Get a list of stock data of the most recent 'weekday' before today.
 def prev_weekday(adate):
@@ -58,20 +55,10 @@ def prev_weekday(adate):
 TODAY = prev_weekday(datetime.datetime.now())
 TODAY = TODAY.strftime("%Y-%m-%d")
 
-STOCK_LIST_DF = readSqliteTable('my_stock_list_quotes', None, None)
-if STOCK_LIST_DF is None:
-    STOCK_LIST_DF = pd.DataFrame()
-    for stock in STOCKS:
-        STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-
+STOCK_LIST_DF = pd.DataFrame()
+    
 # print('Here is a list of stock data of the most recent \'weekday\' before today.')
 # print(STOCK_LIST_DF.to_numpy())
-
-# # Dataframe to graph out the forcast in dropdown.
-STOCK_DF = readSqliteTable('my_stock_quotes', None, None)
-if STOCK_DF is None:
-    STOCK_DF = pd.DataFrame()
-    STOCK_DF = get_stock_df('my_stock_quotes', STOCK_NAME, '{y}-{m}-{d}'.format(y = YY, m = MM, d = DD), TODAY)
 
 # Pre-hyperparameters
 DAYS = 30
@@ -469,20 +456,6 @@ def split_sequences(df, n_steps):
 
 # thread = None
 # thread_lock = Lock()
-@app.route('/')
-@app.route('/results', methods=("POST", "GET"))
-def results():
-    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
-    # return render_template('results.html', title='IEX Trading')
-
-@app.route('/plot.png')
-def plot_png():
-    fig = create_figure(STOCK_DF)
-    output = io.BytesIO()
-    fig.savefig(output, format='png')
-    output.seek(0)
-    return Response(output.getvalue(), mimetype='image/png')
-
 def create_figure(df):
     plt.figure(figsize=(6, 4))
     sns.set_theme(style="whitegrid")
@@ -496,6 +469,38 @@ def create_figure(df):
     plt.xlabel('Date (YYYY-MM-DD)', fontsize=12)
 
     return plt.gcf()
+
+def plot_png(stock_name):
+    stock_df = readSqliteTable('my_stock_quotes', '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
+    if stock_df.empty:
+        stock_df = get_stock_df('my_stock_quotes', stock_name, '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
+
+    print(stock_df)
+
+    image_dir = 'charts/'
+    os.makedirs(image_dir, exist_ok=True)  # Create the directory if it doesn't exist
+
+    image_path = os.path.join(image_dir, '{stock_name}.png'.format(stock_name=stock_name.lower()))
+    if os.path.isfile(image_path):
+        print("File exists for {s}.".format(s=stock_name))
+    else:
+        fig = create_figure(stock_df)
+        fig.savefig(image_path, format='png')
+        plt.close(fig)
+        print("File does not exist for {s}.".format(s=stock_name))
+
+@app.route('/')
+@app.route('/results', methods=("POST", "GET"))
+def results():
+    # Create Graphs for all the stocks
+    for stock in STOCKS:
+        plot_png(stock)
+        STOCK_LIST_DF = readSqliteTable('my_stock_list_quotes', TODAY, TODAY)
+        if STOCK_LIST_DF.empty:
+            STOCK_LIST_DF = pd.DataFrame()
+            STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
+
+    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug = True)
