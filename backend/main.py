@@ -41,7 +41,7 @@ import matplotlib.pyplot as plt
 
 
 app = Flask(__name__)
-STOCKS = ['AAPL', 'NKE']
+STOCKS = ['NKE', 'NKE']
 YY = '2022'
 MM = '06'
 DD = '16'
@@ -504,15 +504,3 @@ def results():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug = True)
-    # y_value_json = STOCK_DF['Close'].values.tolist()
-    # x_value_json = STOCK_DF['Date'].values.tolist()
-    # print(len(y_value_json))
-    # print(len(x_value_json))
-
-    
-
-# 79468220312269963264
-# 8325919859938426880
-# 5887356508577938276352 -> 7
-# 33009899080748703416320 -> 8
-# 12905441533398978920448 -> 14
