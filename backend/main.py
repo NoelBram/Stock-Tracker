@@ -1,10 +1,8 @@
 #Flask imports
-from flask import Flask, render_template, send_file, make_response, url_for, Response
-from flask_socketio import SocketIO
+from flask import Flask, render_template
 
 # Data processing imports
 import os
-import io
 import sys
 import warnings
 if not sys.warnoptions:
@@ -34,14 +32,13 @@ import matplotlib.pyplot as plt
 # Other imports
 from datetime import date, datetime, timedelta
 from threading import Lock
-import math
 from scraper import *
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 
 app = Flask(__name__)
-STOCKS = ['NKE', 'NKE']
+STOCKS = ['AAPL', 'NKE']
 YY = '2022'
 MM = '06'
 DD = '16'
@@ -52,7 +49,7 @@ def prev_weekday(adate):
     while adate.weekday() > 4: # Mon-Fri are 0-4
         adate -= datetime.timedelta(days=1)
     return adate
-TODAY = prev_weekday(datetime.datetime.now())
+TODAY = prev_weekday(datetime.datetime.utcnow())
 TODAY = TODAY.strftime("%Y-%m-%d")
 
 STOCK_LIST_DF = pd.DataFrame()
@@ -241,7 +238,7 @@ class StockMLModelWithTraining(tf.keras.Model):
 
 def save_model(model):
     # Get the current time
-    now = datetime.datetime.now()
+    now = datetime.datetime.utcnow()
     now = now.strftime("%Y-%m-%d_%H:%M:%S")
     folder = f'ml_model_{now}'
     tf.saved_model.save(model, folder)
@@ -471,16 +468,17 @@ def create_figure(df):
     return plt.gcf()
 
 def plot_png(stock_name):
-    stock_df = readSqliteTable('my_stock_quotes', '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
-    if stock_df.empty:
-        stock_df = get_stock_df('my_stock_quotes', stock_name, '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
+    stock_df = pd.DataFrame()
+    stock_df = readSqliteTable('my_stock_list_quotes', '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
+    if stock_df is not None and stock_df.empty:
+        stock_df = get_stock_df('my_stock_list_quotes', stock_name, '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
 
     print(stock_df)
 
     image_dir = 'charts/'
     os.makedirs(image_dir, exist_ok=True)  # Create the directory if it doesn't exist
 
-    image_path = os.path.join(image_dir, '{stock_name}.png'.format(stock_name=stock_name.lower()))
+    image_path = os.path.join(image_dir, '{stock_name}_{y}-{m}-{d}.png'.format(stock_name=stock_name.lower(), y=YY, m=MM, d=DD))
     if os.path.isfile(image_path):
         print("File exists for {s}.".format(s=stock_name))
     else:
@@ -493,13 +491,10 @@ def plot_png(stock_name):
 @app.route('/results', methods=("POST", "GET"))
 def results():
     # Create Graphs for all the stocks
+    STOCK_LIST_DF = pd.DataFrame()
     for stock in STOCKS:
         plot_png(stock)
-        STOCK_LIST_DF = readSqliteTable('my_stock_list_quotes', TODAY, TODAY)
-        if STOCK_LIST_DF.empty:
-            STOCK_LIST_DF = pd.DataFrame()
-            STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-
+        STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
     return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
 
 if __name__ == '__main__':
