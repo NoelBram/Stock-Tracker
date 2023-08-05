@@ -15,22 +15,25 @@
     </tr>
   </thead>
   <tbody>
-    {% for index, row in stocks.iterrows() %}
-      <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ row[0] }}" role="button" aria-expanded="false" aria-controls="collapseExample">
-          <td>{{ row[0] }}</td>
-          <td>{{ today }}</td>
-          <td>{{ row[2] }}</td>
-          <td>{{ row[3] }}</td>
-          <td>{{ row[4] }}</td>
-          <td>{{ row[5] }}</td>
-          <td>{{ row[6] }}</td>
-          <td>{{ row[7] }}</td>
+    {% for row in stocks %}
+      {% set sanitized_symbol = row["Symbol"]|replace(' ', '')|replace('-', '')|replace('.', '') %}
+      <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ sanitized_symbol }}" role="button" aria-expanded="false" aria-controls="collapseExample">
+          <td>{{ row["Symbol"] }}</td>
+          <td>{{ row["Date"] }}</td>
+          <td>{{ row["Open"] }}</td>
+          <td>{{ row["High"] }}</td>
+          <td>{{ row["Low"] }}</td>
+          <td>{{ row["Close"] }}</td>
+          <td>{{ row["Volume"] }}</td>
+          <td>{{ row["Returns"] }}</td>
       </tr>
       <tr>
         <td colspan="8" class="card-output">
-          <div class="collapse" id="{{ row[0] }}">
+          <div class="collapse" id="{{ sanitized_symbol }}">
             <div class="card card-body">
-              <img src="../static/assets/img/charts/nke.png" alt="stock_forecast_chart" height="50%" width="50%">
+              <canvas id="myChart" width="400" height="200"></canvas>
+              <!-- Add other content here for each stock -->
+            </div>
           </div>
         </td>
       </tr>
@@ -41,21 +44,35 @@
 
 {% block scripts %}
 <script>
-  $(document).ready(function () {
-    $('#data').DataTable({
-      ajax: '/api/data',
-      serverSide: true,
-      columns: [
-        {data: 'Symbol'},
-        {data: 'Date'},
-        {data: 'Date'},
-        {data: 'High'},
-        {data: 'Low'},
-        {data: 'Close'},
-        {data: 'Volume'},
-        {data: 'Returns'},
-      ],
-    });
+  // JavaScript code for creating the plot
+  // Access the JSON data from the script tag
+  var jsonData = JSON.parse(document.getElementById('jsonData').textContent).data;
+
+  // Extract data from JSON object
+  var xValues = jsonData.map(item => item.Date);
+  var yValues = jsonData.map(item => item.Close);
+
+  // Create a line chart using Chart.js
+  var ctx = document.getElementById('myChart').getContext('2d');
+  var myChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+          labels: xValues,
+          datasets: [{
+              label: 'Data from Python DataFrame',
+              data: yValues,
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+          }]
+      },
+      options: {
+          scales: {
+              y: {
+                  beginAtZero: true
+              }
+          }
+      }
   });
 </script>
 {% endblock %}

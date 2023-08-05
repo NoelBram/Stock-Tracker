@@ -453,6 +453,26 @@ def split_sequences(df, n_steps):
 
 # thread = None
 # thread_lock = Lock()
+def df_to_png_plot(stock_name):
+    stock_df = pd.DataFrame()
+    stock_df = get_stock_df('my_stock_list_quotes', stock_name, '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
+    if stock_df is not None and stock_df.empty:
+        stock_df = readSqliteTable('my_stock_list_quotes', stock_name, None)
+    if stock_df is not None and stock_df.empty:
+        print('Error!!! stock_df is empty.')
+        return 
+    image_dir = 'charts/'
+    os.makedirs(image_dir, exist_ok=True)  # Create the directory if it doesn't exist
+
+    image_path = os.path.join(image_dir, '{stock_name}.png'.format(stock_name=stock_name.lower()))
+    if os.path.isfile(image_path):
+        print("File exists for {s}.".format(s=stock_name))
+    else:
+        fig = create_figure(stock_df)
+        fig.savefig(image_path, format='png')
+        plt.close(fig)
+        print("File does not exist for {s}.".format(s=stock_name))
+
 def create_figure(df):
     plt.figure(figsize=(6, 4))
     sns.set_theme(style="whitegrid")
@@ -467,35 +487,30 @@ def create_figure(df):
 
     return plt.gcf()
 
-def plot_png(stock_name):
-    stock_df = pd.DataFrame()
-    stock_df = readSqliteTable('my_stock_list_quotes', '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
-    if stock_df is not None and stock_df.empty:
-        stock_df = get_stock_df('my_stock_list_quotes', stock_name, '{y}-{m}-{d}'.format(y=YY, m=MM, d=DD), TODAY)
-
-    print(stock_df)
-
-    image_dir = 'charts/'
-    os.makedirs(image_dir, exist_ok=True)  # Create the directory if it doesn't exist
-
-    image_path = os.path.join(image_dir, '{stock_name}_{y}-{m}-{d}.png'.format(stock_name=stock_name.lower(), y=YY, m=MM, d=DD))
-    if os.path.isfile(image_path):
-        print("File exists for {s}.".format(s=stock_name))
-    else:
-        fig = create_figure(stock_df)
-        fig.savefig(image_path, format='png')
-        plt.close(fig)
-        print("File does not exist for {s}.".format(s=stock_name))
-
 @app.route('/')
 @app.route('/results', methods=("POST", "GET"))
 def results():
     # Create Graphs for all the stocks
-    STOCK_LIST_DF = pd.DataFrame()
+    stock_list_df = pd.DataFrame()
     for stock in STOCKS:
-        plot_png(stock)
-        STOCK_LIST_DF = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-    return render_template('results.html', title='Stock Forcasting', stocks = STOCK_LIST_DF, today = TODAY)
+        # stock_data = df_to_png_plot(stock)
+        # print(stock_data)
+        # stock_list_df = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
+        stock_list_df = get_stock_df('my_stock_list_quotes', stock, None, None)
+    stock_list_data = stock_list_df.to_json()
+
+    return render_template('results.html', title='Stock Forecasting', stocks = stock_list_data, today = TODAY)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=80, debug = True)
+    # app.run(host='0.0.0.0', port=80, debug = True)
+    stock_list_df = pd.DataFrame()
+    for stock in STOCKS:
+        new_stock_df = get_stock_df('my_stock_list_quotes', stock, start_date, TODAY)
+        stock_list_df = pd.concat([new_stock_df, stock_list_df])
+
+    # Output the stock_list_data to a JSON file with indentation
+    with open("stock_data.json", "w") as json_file:
+        stock_list_df.to_json(json_file, orient="records", indent=4)
+
+    print('\nXXX- the stock_list_df: -XXX')
+    print(stock_list_df)
