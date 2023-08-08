@@ -132,7 +132,7 @@ def createSqliteTable(df, title):
 
 def deleteRecord(df, title, symbol):
     try:
-        sqliteConnection = sqlite3.connect(database_LOCATION)
+        sqliteConnection = sqlite3.connect(DB_LOCATION)
         cursor = sqliteConnection.cursor()
         print('D--- Connected to SQLite ---D')
 
@@ -229,7 +229,7 @@ def get_stock_df(title, symbol, dateA, dateB):
         print('<--- The input data is valid and now proceeding to the load stage; --->\n{data}'.format(data = stock_quotes_df))
     else:
         print('E--- ERROR! The input data is invalid and can\'t proceed to the Load stage; ---E\n{df}\n'.format(df = stock_quotes_df))
-        return stock_quotes_df
+        return pd.DataFrame(stock_quotes_df)
 
     # Load
     sql_db = readSqliteTable(title, symbol, None)
@@ -242,7 +242,7 @@ def get_stock_df(title, symbol, dateA, dateB):
         createSqliteTable(stock_quotes_df, title)
         print('\n<--- Created a {t} database with {s} data from {b} to {a}. --->\n'.format(s = symbol, t = title, b = dateB, a = dateA))
     print('(Database {t}):'.format(t = title))
-    return readSqliteTable(title, symbol, None)        
+    return pd.DataFrame(readSqliteTable(title, symbol, None))       
 
 # Get a list of stock data of the most recent 'weekday' before today.
 def prev_weekday(adate, num):

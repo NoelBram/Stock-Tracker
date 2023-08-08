@@ -16,7 +16,7 @@
   </thead>
   <tbody>
     {% for row in stocks %}
-      {% set sanitized_symbol = row["Symbol"]|replace(' ', '')|replace('-', '')|replace('.', '') %}
+      <!-- {% set sanitized_symbol = row["Symbol"]|replace(' ', '')|replace('-', '')|replace('.', '') %} -->
       <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ sanitized_symbol }}" role="button" aria-expanded="false" aria-controls="collapseExample">
           <td>{{ row["Symbol"] }}</td>
           <td>{{ row["Date"] }}</td>
@@ -44,13 +44,12 @@
 
 {% block scripts %}
 <script>
-  // JavaScript code for creating the plot
-  // Access the JSON data from the script tag
-  var jsonData = JSON.parse(document.getElementById('jsonData').textContent).data;
-
-  // Extract data from JSON object
-  var xValues = jsonData.map(item => item.Date);
-  var yValues = jsonData.map(item => item.Close);
+  // Parse the JSON object from Flask
+  var stocksData = JSON.parse('{{ stocks|safe }}');
+  
+  // Extract Date and Close values for chart
+  var xValues = stocksData.map(item => item.Date);
+  var yValues = stocksData.map(item => item.Close);
 
   // Create a line chart using Chart.js
   var ctx = document.getElementById('myChart').getContext('2d');

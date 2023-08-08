@@ -491,26 +491,35 @@ def create_figure(df):
 @app.route('/results', methods=("POST", "GET"))
 def results():
     # Create Graphs for all the stocks
-    stock_list_df = pd.DataFrame()
-    for stock in STOCKS:
-        # stock_data = df_to_png_plot(stock)
-        # print(stock_data)
-        # stock_list_df = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-        stock_list_df = get_stock_df('my_stock_list_quotes', stock, None, None)
-    stock_list_data = stock_list_df.to_json()
+    stock = 'NKE'
+    # for stock in STOCKS:
+    #     # stock_data = df_to_png_plot(stock)
+    #     # print(stock_data)
+    #     # stock_list_df = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
+    #     stock_list_df = get_stock_df('{s}'.format(s = stock), stock, start_date, TODAY)
+    stock_list_df = get_stock_df('{s}'.format(s = stock), stock, start_date, TODAY)
+    stock_list_json_object = stock_list_df.to_json(orient='records')
+    stock_list_json_object = {'stock': '{s}'.format(s = stock), 'data': stock_list_json_object}
+    stock_list_json_object = json.dumps(stock_list_json_object, indent=4)
 
-    return render_template('results.html', title='Stock Forecasting', stocks = stock_list_data, today = TODAY)
-
-if __name__ == '__main__':
-    # app.run(host='0.0.0.0', port=80, debug = True)
-    stock_list_df = pd.DataFrame()
-    for stock in STOCKS:
-        new_stock_df = get_stock_df('my_stock_list_quotes', stock, start_date, TODAY)
-        stock_list_df = pd.concat([new_stock_df, stock_list_df])
 
     # Output the stock_list_data to a JSON file with indentation
     with open("stock_data.json", "w") as json_file:
-        stock_list_df.to_json(json_file, orient="records", indent=4)
+        stock_list_json_object.to_json(json_file, orient="records", indent=4)
 
-    print('\nXXX- the stock_list_df: -XXX')
-    print(stock_list_df)
+    return render_template('results.html', title='Stock Forecasting', stocks = stock_list_json_object, today = TODAY)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80, debug = True)
+    # stock_list_df = pd.DataFrame()
+    # for stock in STOCKS:
+    #     new_stock_df = get_stock_df('{s}'.format(s = stock), stock, start_date, TODAY)
+    #     # Create a dictionary to store DataFrames with their names
+    #     stock_list_df = pd.concat([new_stock_df, stock_list_df])
+
+    # # Output the stock_list_data to a JSON file with indentation
+    # with open("stock_data.json", "w") as json_file:
+    #     stock_list_df.to_json(json_file, orient="records", indent=4)
+
+    # print('\nXXX- the stock_list_df: -XXX')
+    # print(stock_list_df)
