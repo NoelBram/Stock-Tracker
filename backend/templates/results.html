@@ -15,24 +15,22 @@
     </tr>
   </thead>
   <tbody>
-    {% for row in stocks %}
-      <!-- {% set sanitized_symbol = row["Symbol"]|replace(' ', '')|replace('-', '')|replace('.', '') %} -->
-      <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ sanitized_symbol }}" role="button" aria-expanded="false" aria-controls="collapseExample">
-          <td>{{ row["Symbol"] }}</td>
-          <td>{{ row["Date"] }}</td>
-          <td>{{ row["Open"] }}</td>
-          <td>{{ row["High"] }}</td>
-          <td>{{ row["Low"] }}</td>
-          <td>{{ row["Close"] }}</td>
-          <td>{{ row["Volume"] }}</td>
-          <td>{{ row["Returns"] }}</td>
+    {% for stock in stock_data %}
+      <tr class="symbol-link" data-bs-toggle="collapse" href="#{{ stock.stock }}" role="button" aria-expanded="false" aria-controls="collapseExample">
+          <td>{{ stock.stock }}</td>
+          <td>{{ stock.data[-1]["Date"] }}</td>
+          <td>{{ stock.data[-1]["Open"] }}</td>
+          <td>{{ stock.data[-1]["High"] }}</td>
+          <td>{{ stock.data[-1]["Low"] }}</td>
+          <td>{{ stock.data[-1]["Close"] }}</td>
+          <td>{{ stock.data[-1]["Volume"] }}</td>
+          <td>{{ stock.data[-1]["Returns"] }}</td>
       </tr>
       <tr>
         <td colspan="8" class="card-output">
-          <div class="collapse" id="{{ sanitized_symbol }}">
+          <div class="collapse" id="{{ stock.stock }}">
             <div class="card card-body">
-              <canvas id="myChart" width="400" height="200"></canvas>
-              <!-- Add other content here for each stock -->
+              <canvas id="myChart{{ stock.stock }}" width="400" height="200"></canvas>
             </div>
           </div>
         </td>
@@ -44,34 +42,38 @@
 
 {% block scripts %}
 <script>
-  // Parse the JSON object from Flask
-  var stocksData = JSON.parse('{{ stocks|safe }}');
-  
-  // Extract Date and Close values for chart
-  var xValues = stocksData.map(item => item.Date);
-  var yValues = stocksData.map(item => item.Close);
+  // Parse the list using the tojson filter and safe filter
+  var stocksData = JSON.parse('{{ stock_data|tojson|safe }}');
+  console.log("WWW stocksData: ", stocksData);
 
-  // Create a line chart using Chart.js
-  var ctx = document.getElementById('myChart').getContext('2d');
-  var myChart = new Chart(ctx, {
+  // Iterate through the list and access the properties
+  for (var i = 0; i < stocksData.length; i++) {
+    var stock = stocksData[i];
+    var xValues = stock.data.map(item => item.data["Date"]);
+    var yValues = stock.data.map(item => item.data["Close"]);
+
+    // Create a line chart using Chart.js
+    var ctx = document.getElementById('myChart' + stock.stock).getContext('2d');
+    var myChart = new Chart(ctx, {
       type: 'line',
       data: {
-          labels: xValues,
-          datasets: [{
-              label: 'Data from Python DataFrame',
-              data: yValues,
-              backgroundColor: 'rgba(75, 192, 192, 0.2)',
-              borderColor: 'rgba(75, 192, 192, 1)',
-              borderWidth: 1
-          }]
+        labels: xValues,
+        datasets: [{
+          label: 'Data from Python DataFrame',
+          data: yValues,
+          backgroundColor: 'rgba(75, 192, 192, 0.2)',
+          borderColor: 'rgba(75, 192, 192, 1)',
+          borderWidth: 1
+        }]
       },
       options: {
-          scales: {
-              y: {
-                  beginAtZero: true
-              }
+        scales: {
+          y: {
+            beginAtZero: true
           }
+        }
       }
-  });
+    });
+  }
 </script>
 {% endblock %}

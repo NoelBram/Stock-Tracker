@@ -1,5 +1,5 @@
 #Flask imports
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 
 # Data processing imports
 import os
@@ -490,24 +490,15 @@ def create_figure(df):
 @app.route('/')
 @app.route('/results', methods=("POST", "GET"))
 def results():
-    # Create Graphs for all the stocks
-    stock = 'NKE'
-    # for stock in STOCKS:
-    #     # stock_data = df_to_png_plot(stock)
-    #     # print(stock_data)
-    #     # stock_list_df = get_stock_df('my_stock_list_quotes', stock, TODAY, TODAY)
-    #     stock_list_df = get_stock_df('{s}'.format(s = stock), stock, start_date, TODAY)
-    stock_list_df = get_stock_df('{s}'.format(s = stock), stock, start_date, TODAY)
-    stock_list_json_object = stock_list_df.to_json(orient='records')
-    stock_list_json_object = {'stock': '{s}'.format(s = stock), 'data': stock_list_json_object}
-    stock_list_json_object = json.dumps(stock_list_json_object, indent=4)
+    # Create data for all the stocks graphs
+    stock_data = []
+    for stock in STOCKS:
+        stock_list_df = get_stock_df('{s}'.format(s=stock), stock, start_date, TODAY)
+        stock_list_json = stock_list_df.to_dict(orient='records')
+        stock_data.append({'stock': stock, 'data': stock_list_json})
 
+    return render_template('results.html', title='Stock Forecasting', stock_data=stock_data)
 
-    # Output the stock_list_data to a JSON file with indentation
-    with open("stock_data.json", "w") as json_file:
-        stock_list_json_object.to_json(json_file, orient="records", indent=4)
-
-    return render_template('results.html', title='Stock Forecasting', stocks = stock_list_json_object, today = TODAY)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=80, debug = True)
